@@ -92,6 +92,14 @@
         </el-table-column>
         <el-table-column prop="companyIndustry" label="行业" min-width="150" show-overflow-tooltip />
         <el-table-column prop="companySize" label="公司规模" width="120" />
+        <el-table-column prop="companyWelfare" label="公司福利" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="jobDesc" label="工作介绍" min-width="320">
+          <template #default="{ row }">
+            <span v-if="row.jobDesc" class="desc-preview" :title="row.jobDesc">{{ formatDescPreview(row.jobDesc) }}</span>
+            <el-button v-if="row.jobDesc && row.jobDesc.length > 60" link type="primary" @click="openDesc(row)">查看</el-button>
+            <span v-else-if="!row.jobDesc">-</span>
+          </template>
+        </el-table-column>
       </el-table>
       
       <el-pagination
@@ -105,6 +113,10 @@
         style="margin-top: 20px; justify-content: flex-end"
       />
     </el-card>
+
+    <el-dialog v-model="descDialogVisible" :title="descDialogTitle" width="720px">
+      <div class="desc-dialog-content">{{ descDialogContent }}</div>
+    </el-dialog>
   </div>
 </template>
 
@@ -139,6 +151,10 @@ const allJobs = ref([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
+
+const descDialogVisible = ref(false)
+const descDialogTitle = ref('')
+const descDialogContent = ref('')
 
 const filteredJobs = computed(() => {
   if (!tableSearch.value) return jobs.value
@@ -212,6 +228,18 @@ const handleCurrentChange = (val) => {
   loadJobs()
 }
 
+const formatDescPreview = (desc) => {
+  const normalized = String(desc || '').replace(/\s+/g, ' ').trim()
+  if (!normalized) return '-'
+  return normalized.length > 60 ? normalized.slice(0, 60) + '...' : normalized
+}
+
+const openDesc = (row) => {
+  descDialogTitle.value = `${row.jobName || '岗位'} - 工作介绍`
+  descDialogContent.value = row.jobDesc || ''
+  descDialogVisible.value = true
+}
+
 const handleExport = async () => {
   exporting.value = true
   try {
@@ -230,7 +258,7 @@ const handleExport = async () => {
 }
 
 const exportToCSV = (data) => {
-  const headers = ['岗位名称', '公司名称', '城市', '最低薪资(K)', '最高薪资(K)', '学历', '经验', '行业', '公司规模']
+  const headers = ['岗位名称', '公司名称', '城市', '最低薪资(K)', '最高薪资(K)', '学历', '经验', '行业', '公司规模', '公司福利', '工作介绍']
   const rows = data.map(job => [
     job.jobName || '',
     job.companyName || '',
@@ -240,7 +268,9 @@ const exportToCSV = (data) => {
     job.education || '',
     job.experience || '',
     job.companyIndustry || '',
-    job.companySize || ''
+    job.companySize || '',
+    job.companyWelfare || '',
+    job.jobDesc || ''
   ])
 
   let csvContent = '\uFEFF'
@@ -342,6 +372,21 @@ onMounted(() => {
 .salary-tag {
   font-weight: bold;
   color: #f5576c;
+}
+
+.desc-preview {
+  display: inline-block;
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+.desc-dialog-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
 }
 
 :deep(.el-pagination) {

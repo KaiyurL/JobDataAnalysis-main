@@ -1,7 +1,6 @@
 package com.jobdata.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.jobdata.entity.JobInfo;
 import com.jobdata.mapper.JobInfoMapper;
 import com.jobdata.service.DataManageService;
@@ -11,10 +10,11 @@ import org.springframework.stereotype.Service;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class DataManageServiceImpl implements DataManageService {
@@ -23,7 +23,6 @@ public class DataManageServiceImpl implements DataManageService {
     private JobInfoMapper jobInfoMapper;
 
     private static final String[] KEYWORDS = {"Java", "Python", "前端", "数据分析", "产品经理"};
-    private static final String SPIDER_PATH = "F:\\JobDataAnalysis\\crawler\\spider.py";
     private static final String PYTHON_CMD = "python";
 
     // 状态: idle, running, failed
@@ -107,18 +106,22 @@ public class DataManageServiceImpl implements DataManageService {
     }
 
     private void runSpider() throws Exception {
-        File spiderFile = new File(SPIDER_PATH);
+        Path crawlerDir = resolveCrawlerDir();
+        Path spiderPath = crawlerDir.resolve("spider.py").toAbsolutePath().normalize();
+        File spiderFile = spiderPath.toFile();
         if (!spiderFile.exists()) {
-            throw new RuntimeException("爬虫脚本不存在: " + SPIDER_PATH);
+            throw new RuntimeException("爬虫脚本不存在: " + spiderPath);
         }
 
-        ProcessBuilder pb = new ProcessBuilder(PYTHON_CMD, SPIDER_PATH);
-        pb.directory(new File("F:\\JobDataAnalysis\\crawler"));
+        String python = resolvePythonExecutable(crawlerDir);
+        ensureCrawlerDependencies(crawlerDir, python);
+
+        ProcessBuilder pb = new ProcessBuilder(python, spiderPath.toString());
+        pb.directory(crawlerDir.toFile());
         pb.redirectErrorStream(true);
 
         Process process = pb.start();
 
-        // 读取输出（可选，用于调试）
         BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "GBK"));
         String line;
         while ((line = reader.readLine()) != null) {
@@ -128,6 +131,122 @@ public class DataManageServiceImpl implements DataManageService {
         int exitCode = process.waitFor();
         if (exitCode != 0) {
             throw new RuntimeException("爬虫执行失败，退出码: " + exitCode);
+        }
+    }
+
+    private Path resolveCrawlerDir() {
+        Path current = Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
+        List<Path> candidates = Arrays.asList(
+                current.resolve("crawler"),
+                current.resolve("..").resolve("crawler"),
+                current.resolve("..").resolve("..").resolve("crawler")
+        );
+        for (Path candidate : candidates) {
+            Path spider = candidate.resolve("spider.py");
+            if (spider.toFile().exists()) {
+                return candidate.toAbsolutePath().normalize();
+            }
+        }
+        return candidates.get(0).toAbsolutePath().normalize();
+    }
+
+    private String resolvePythonExecutable(Path crawlerDir) {
+        String configured = System.getenv("JOBDATA_PYTHON");
+        if (configured != null && !configured.trim().isEmpty()) {
+            return configured.trim();
+        }
+
+        String condaPythonExe = System.getenv("CONDA_PYTHON_EXE");
+        if (condaPythonExe != null && !condaPythonExe.trim().isEmpty()) {
+            return condaPythonExe.trim();
+        }
+
+        String condaPrefix = System.getenv("CONDA_PREFIX");
+        if (condaPrefix != null && !condaPrefix.trim().isEmpty()) {
+            Path p = Paths.get(condaPrefix.trim()).resolve("python.exe");
+            if (p.toFile().exists()) {
+                return p.toAbsolutePath().normalize().toString();
+            }
+        }
+
+        List<Path> candidates = Arrays.asList(
+                crawlerDir.resolve(".venv").resolve("Scripts").resolve("python.exe"),
+                crawlerDir.resolve("venv").resolve("Scripts").resolve("python.exe"),
+                crawlerDir.resolve("env").resolve("Scripts").resolve("python.exe")
+        );
+
+        for (Path p : candidates) {
+            if (p.toFile().exists()) {
+                return p.toAbsolutePath().normalize().toString();
+            }
+        }
+
+        return PYTHON_CMD;
+    }
+
+    private void ensureCrawlerDependencies(Path crawlerDir, String python) throws Exception {
+        Path requirements = crawlerDir.resolve("requirements.txt");
+        if (!requirements.toFile().exists()) {
+            return;
+        }
+
+        if (checkPythonModule(python, crawlerDir, "pymysql")) {
+            return;
+        }
+
+        ensurePipAvailable(crawlerDir, python);
+
+        ProcessBuilder pb = new ProcessBuilder(python, "-m", "pip", "install", "-r", requirements.toString());
+        pb.directory(crawlerDir.toFile());
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "GBK"));
+        String line;
+        while ((line = reader.readLine()) != null) {
+            System.out.println("[Pip] " + line);
+        }
+
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new RuntimeException("依赖安装失败，退出码: " + exitCode);
+        }
+    }
+
+    private void ensurePipAvailable(Path workDir, String python) throws Exception {
+        if (checkPythonModule(python, workDir, "pip")) {
+            return;
+        }
+
+        ProcessBuilder pb = new ProcessBuilder(python, "-m", "ensurepip", "--upgrade");
+        pb.directory(workDir.toFile());
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "GBK"));
+        String line;
+        while ((line = reader.readLine()) != null) {
+            System.out.println("[EnsurePip] " + line);
+        }
+
+        int exitCode = process.waitFor();
+        if (exitCode == 0 && checkPythonModule(python, workDir, "pip")) {
+            return;
+        }
+
+        throw new RuntimeException("当前 Python 环境缺少 pip，请在启动后端前设置环境变量 JOBDATA_PYTHON 指向 conda 的 python.exe（或创建 crawler/.venv）。当前: " + python);
+    }
+
+    private boolean checkPythonModule(String python, Path workDir, String moduleName) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(python, "-c", "import " + moduleName);
+            pb.directory(workDir.toFile());
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            process.getInputStream().close();
+            return process.waitFor() == 0;
+        } catch (Exception e) {
+            return false;
         }
     }
 }

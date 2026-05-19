@@ -9,6 +9,9 @@ import os
 import glob
 import tempfile
 from datetime import datetime
+from urllib.parse import quote
+
+import requests
 from DrissionPage import ChromiumPage, ChromiumOptions
 from DrissionPage.errors import BrowserConnectError
 
@@ -37,6 +40,69 @@ def find_chrome_path():
         if p and os.path.exists(p):
             return p
     return None
+
+def get_user_agent_of_pc():
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0'
+    ]
+    return random.choice(user_agents)
+
+def create_session_from_page(page, keyword, city_code):
+    session = requests.Session()
+    sync_session_cookies(session, page)
+
+    session.headers.update({
+        'User-Agent': get_user_agent_of_pc(),
+        'Accept': 'application/json, text/plain, */*',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Origin': 'https://www.zhipin.com',
+        'Referer': f'https://www.zhipin.com/web/geek/job?query={quote(keyword)}&city={city_code}',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+        'Connection': 'close'
+    })
+
+    return session
+
+def sync_session_cookies(session, page):
+    cookies_dict = {}
+    try:
+        cookies_list = page.cookies()
+        for cookie in cookies_list:
+            name = cookie.get('name')
+            value = cookie.get('value')
+            if name and value is not None:
+                cookies_dict[name] = value
+    except Exception:
+        cookies_dict = {}
+
+    session.cookies.clear()
+    for k, v in cookies_dict.items():
+        session.cookies.set(k, v)
+
+def fetch_job_detail_desc(session, page, security_id, referer=None):
+    if not security_id:
+        return None
+
+    url = 'https://www.zhipin.com/wapi/zpgeek/job/detail.json'
+    try:
+        sync_session_cookies(session, page)
+        if referer:
+            session.headers['Referer'] = referer
+        resp = session.get(url, params={'securityId': security_id}, timeout=15)
+        if resp.status_code != 200:
+            return None
+        result = resp.json()
+        if result.get('code') != 0:
+            return None
+        zp_data = result.get('zpData') or {}
+        job_info = zp_data.get('jobInfo') or {}
+        desc = job_info.get('postDescription')
+        return desc.strip() if isinstance(desc, str) and desc.strip() else None
+    except Exception:
+        return None
 
 def get_city_code(city_name):
     city_codes = {
@@ -74,11 +140,11 @@ def get_city_code(city_name):
 
 def load_config():
     default_config = {
-        "keywords": ["Java", "Python", "前端", "数据分析", "产品经理"],
-        "cities": ["北京", "上海", "广州", "深圳", "杭州"],
-        "pages_per_keyword": 2,
-        "delay_min": 3,
-        "delay_max": 8
+        "keywords": ["Java", "Python", "前端", "数据分析", "产品经理"],# 关键词
+        "cities": ["北京", "上海", "广州", "深圳", "杭州","福州"],# 城市
+        "pages_per_keyword": 2,# 每个关键词爬取的页数
+        "delay_min": 3,# 最小延迟时间（秒）
+        "delay_max": 8# 最大延迟时间（秒）
     }
     
     if os.path.exists(CONFIG_FILE):
@@ -107,7 +173,7 @@ def parse_city(city_text):
 def parse_education(education_text):
     if not education_text:
         return None
-    edu_map = {'博士': '博士', '硕士': '硕士', '本科': '本科', '大专': '大专', '高中': '高中'}
+    edu_map = {'博士': '博士', '硕士': '硕士', '本科': '本科', '大专': '大专', '高中': '高中'}# 学历映射
     for key in edu_map:
         if key in education_text:
             return edu_map[key]
@@ -128,8 +194,8 @@ def insert_job(job_data):
             sql = '''
             INSERT INTO job_info 
             (job_name, company_name, city, salary_min, salary_max, salary_avg, 
-             experience, education, job_desc, job_keywords, company_size, company_industry, publish_date)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             experience, education, job_desc, job_keywords, company_size, company_industry, company_welfare, publish_date)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             '''
             salary_avg = None
             if job_data['salary_min'] and job_data['salary_max']:
@@ -148,6 +214,7 @@ def insert_job(job_data):
                 job_data['job_keywords'], # 关键词
                 job_data['company_size'], # 公司规模
                 job_data['company_industry'], # 公司行业
+                job_data.get('company_welfare'),
                 datetime.now().date() # 发布日期
             ))
         conn.commit()
@@ -166,11 +233,11 @@ def random_delay(min_sec, max_sec):
 
 def scrape_jobs():
     config = load_config()
-    KEYWORDS = config.get("keywords", ["Java", "Python", "前端", "数据分析", "产品经理"])
-    CITIES = config.get("cities", ["北京", "上海", "广州", "深圳", "杭州"])
-    PAGES_PER_KEYWORD = config.get("pages_per_keyword", 2)
-    DELAY_MIN = config.get("delay_min", 3)
-    DELAY_MAX = config.get("delay_max", 8)
+    KEYWORDS = config.get("keywords", ["Java", "Python", "前端", "数据分析", "产品经理","数据挖掘","全栈","后端","Ai","计算机"])# 关键词
+    CITIES = config.get("cities", ["北京", "上海", "广州", "深圳", "杭州","福州"])# 城市
+    PAGES_PER_KEYWORD = config.get("pages_per_keyword", 2)# 每个关键词爬取的页数
+    DELAY_MIN = config.get("delay_min", 3)# 最小延迟时间（秒）
+    DELAY_MAX = config.get("delay_max", 8)# 最大延迟时间（秒）
     
     total_inserted = 0
     
@@ -192,7 +259,9 @@ def scrape_jobs():
         print("未找到可用的 Chrome/Chromium 可执行文件。")
         return
 
-    tmp_path = os.path.join(tempfile.gettempdir(), 'DrissionPage')
+    tmp_path = os.path.join(os.path.dirname(__file__), 'tmp')
+    os.makedirs(tmp_path, exist_ok=True)
+
     options = ChromiumOptions(read_file=False)
     options.set_browser_path(chrome_path)
     options.auto_port(tmp_path=tmp_path)
@@ -226,11 +295,13 @@ def scrape_jobs():
     print("请确认浏览器中是否已登录 BOSS 直聘？")
     print("如果没有登录，请先手动登录，然后按回车键继续...")
     input()
-    
+
     print()
     print("开始爬取...")
     print()
-    
+
+    session = None
+
     print("正在启动网络监听...")
     page.listen.start('joblist')
     
@@ -242,7 +313,10 @@ def scrape_jobs():
             print("="*60)
             
             city_code = get_city_code(city)
-            
+
+            if session is None:
+                session = create_session_from_page(page, keyword, city_code)
+
             for page_num in range(1, PAGES_PER_KEYWORD + 1):
                 try:
                     url = f'https://www.zhipin.com/web/geek/job?query={keyword}&city={city_code}&page={page_num}'
@@ -291,13 +365,29 @@ def scrape_jobs():
                                 job_item.get('companyIndustry', '') or 
                                 job_item.get('industry', '')
                             )
+
+                            welfare = job_item.get('welfareList') or job_item.get('welfare') or job_item.get('welfareName')
+                            if isinstance(welfare, list):
+                                welfare = ','.join([str(x).strip() for x in welfare if str(x).strip()])
+                            elif welfare is not None:
+                                welfare = str(welfare).strip() or None
                             
-                            job_desc = job_item.get('jobDesc', '') or job_item.get('jobDetail', '') or job_name
+                            security_id = job_item.get('securityId', '')
+                            encrypt_job_id = job_item.get('encryptJobId', '')
+                            referer = f'https://www.zhipin.com/job_detail/{encrypt_job_id}.html' if encrypt_job_id else None
+                            detail_desc = fetch_job_detail_desc(session, page, security_id, referer) if session else None
+                            job_desc = detail_desc or job_item.get('jobDesc', '') or job_item.get('jobDetail', '') or job_name
                             
                             salary_min, salary_max = parse_salary(salary_text)
                             clean_city = parse_city(city_text)
                             clean_education = parse_education(education)
-                            keywords = extract_keywords(job_desc)
+                            skills = job_item.get('skills')
+                            if isinstance(skills, list):
+                                keywords = ','.join([str(x).strip() for x in skills if str(x).strip()])
+                            elif isinstance(skills, str) and skills.strip():
+                                keywords = skills.strip()
+                            else:
+                                keywords = extract_keywords(job_desc)
                             
                             job_data = {
                                 'job_name': job_name,
@@ -310,7 +400,8 @@ def scrape_jobs():
                                 'job_desc': job_desc,
                                 'job_keywords': keywords,
                                 'company_size': company_size,
-                                'company_industry': company_industry
+                                'company_industry': company_industry,
+                                'company_welfare': welfare
                             }
                             
                             if job_name and company_name:

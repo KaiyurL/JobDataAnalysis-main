@@ -43,6 +43,8 @@ public class JobInfo implements Serializable {
 
     private String companyIndustry;
 
+    private String companyWelfare;
+
     private LocalDate publishDate;
 
     private LocalDateTime createdAt;
