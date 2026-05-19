@@ -19,7 +19,11 @@
       </el-menu-item>
       <el-menu-item index="/job-analysis">
         <el-icon><Briefcase /></el-icon>
-        <span>岗位分析</span>
+        <span>岗位分析(BOSS直聘)</span>
+      </el-menu-item>
+      <el-menu-item index="/job-analysis-51job">
+        <el-icon><Briefcase /></el-icon>
+        <span>岗位分析(前程无忧)</span>
       </el-menu-item>
       <el-menu-item index="/skill-analysis">
         <el-icon><TrendCharts /></el-icon>

@@ -24,6 +24,12 @@
               <span class="stat-number">{{ overview.totalCount || 0 }}</span>
               条记录
             </el-descriptions-item>
+            <el-descriptions-item label="本次开始时间">
+              <span class="stat-text">{{ overview.lastStartTime || '未开始' }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="本次结束时间">
+              <span class="stat-text">{{ overview.lastEndTime || (overview.status === 'running' ? '进行中' : '未知') }}</span>
+            </el-descriptions-item>
             <el-descriptions-item label="上次爬取时间">
               <span class="stat-text">{{ overview.lastCrawlTime || '未知' }}</span>
             </el-descriptions-item>
@@ -55,6 +61,15 @@
           </template>
 
           <el-form :model="config" label-width="120px">
+            <el-form-item label="数据源">
+              <el-select v-model="config.platform" style="width: 100%;">
+                <el-option label="BOSS直聘" value="boss" />
+                <el-option label="前程无忧" value="51job" />
+                <el-option label="全部" value="both" />
+              </el-select>
+              <div class="form-tip">选择要爬取的数据平台</div>
+            </el-form-item>
+
             <el-form-item label="岗位关键词">
               <div class="keywords-input">
                 <el-tag
@@ -114,6 +129,42 @@
                 :max="10"
               />
               <span style="margin-left: 10px;">页/关键词</span>
+            </el-form-item>
+
+            <el-form-item v-if="config.platform !== 'boss'" label="前程无忧页数">
+              <el-input-number 
+                v-model="config.pages_per_city_51job" 
+                :min="1" 
+                :max="20"
+              />
+              <span style="margin-left: 10px;">页/城市/关键词</span>
+            </el-form-item>
+
+            <el-form-item v-if="config.platform !== 'boss'" label="前程无忧城市编码">
+              <el-table :data="cityCodeRows" size="small" border style="width: 100%;">
+                <el-table-column prop="name" label="城市" width="140" />
+                <el-table-column label="编码" min-width="160">
+                  <template #default="{ row }">
+                    <el-input
+                      v-model="config.city_codes_51job[row.name]"
+                      size="small"
+                      placeholder="例如 010000"
+                    />
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="90">
+                  <template #default="{ row }">
+                    <el-button type="danger" size="small" link @click="removeCityCode(row.name)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+
+              <div style="display: flex; gap: 10px; margin-top: 10px; width: 100%;">
+                <el-input v-model="newCityCodeName" placeholder="新增城市名（如 北京）" />
+                <el-input v-model="newCityCodeValue" placeholder="新增编码（如 010000）" />
+                <el-button type="primary" @click="addCityCode">添加</el-button>
+              </div>
+              <div class="form-tip">只对前程无忧有效；用于 jobArea 参数</div>
             </el-form-item>
 
             <el-form-item label="请求延迟">
@@ -179,11 +230,22 @@
               <el-icon><Refresh /></el-icon>
               {{ buttonDisabled ? '请等待...' : '立即更新数据' }}
             </el-button>
+
+            <el-button
+              v-if="canConfirmLogin"
+              type="primary"
+              size="large"
+              @click="confirmLogin"
+              style="width: 100%; height: 50px; margin-top: 12px;"
+            >
+              我已登录，继续爬取
+            </el-button>
             
             <div class="tips">
               <p>⚠️ 注意：点击后将启动爬虫脚本，过程可能需要几分钟</p>
               <p>💡 请先保存配置，再启动爬虫</p>
               <p>🔒 爬虫运行时按钮将禁用30秒，防止重复触发</p>
+              <p v-if="canConfirmLogin">✅ 请先在弹出的浏览器中完成登录/验证，然后点击“我已登录，继续爬取”</p>
             </div>
           </div>
         </el-card>
@@ -204,7 +266,7 @@
             </div>
             <div class="preview-item">
               <span class="preview-label">预计请求：</span>
-              <span class="preview-value">{{ config.keywords.length * config.cities.length * config.pages_per_keyword }} 次</span>
+              <span class="preview-value">{{ expectedRequests }} 次</span>
             </div>
           </div>
         </el-card>
@@ -246,14 +308,19 @@ const logs = ref([])
 const logContainer = ref(null)
 const newKeyword = ref('')
 const selectedCity = ref('')
+const newCityCodeName = ref('')
+const newCityCodeValue = ref('')
 
 // 配置相关
 const config = ref({
+  platform: 'boss',
   keywords: [],
   cities: [],
   pages_per_keyword: 2,
+  pages_per_city_51job: 2,
   delay_min: 3,
-  delay_max: 8
+  delay_max: 8,
+  city_codes_51job: {}
 })
 const originalConfig = ref({})
 
@@ -265,6 +332,30 @@ const allCities = [
   '福州', '济南', '昆明', '南昌', '哈尔滨',
   '沈阳', '长春', '石家庄', '太原', '郑州'
 ]
+
+const defaultCityCodes51Job = {
+  北京: '010000',
+  上海: '020000',
+  广州: '030200',
+  深圳: '040000',
+  杭州: '080200',
+  苏州: '070300',
+  南京: '070200',
+  成都: '090200',
+  武汉: '180200',
+  西安: '200200',
+  重庆: '060000',
+  天津: '050000',
+  郑州: '170200',
+  长沙: '190200',
+  青岛: '120200',
+  大连: '230200',
+  厦门: '110200',
+  宁波: '080300',
+  无锡: '070400',
+  合肥: '150200',
+  福州: '110300'
+}
 
 let pollTimer = null
 let disabledTimer = null
@@ -287,19 +378,26 @@ const configChanged = computed(() => {
   return JSON.stringify(config.value) !== JSON.stringify(originalConfig.value)
 })
 
-const addLog = (text) => {
-  const time = new Date().toLocaleTimeString()
-  logs.value.unshift({ time, text })
-  if (logs.value.length > 50) logs.value.pop()
-  setTimeout(() => {
-    if (logContainer.value) {
-      logContainer.value.scrollTop = 0
-    }
-  }, 0)
-}
+const deepClone = (obj) => JSON.parse(JSON.stringify(obj))
+
+const canConfirmLogin = computed(() => {
+  return overview.value?.status === 'running' && overview.value?.waitingForLogin === true
+})
+
+const expectedRequests = computed(() => {
+  const kw = config.value.keywords?.length || 0
+  const ct = config.value.cities?.length || 0
+  const boss = kw * ct * (config.value.pages_per_keyword || 0)
+  const job51 = kw * ct * (config.value.pages_per_city_51job || 0)
+  if (config.value.platform === 'both') return boss + job51
+  if (config.value.platform === '51job') return job51
+  return boss
+})
 
 const clearLogs = () => {
-  logs.value = []
+  api.clearCrawlerLogs().finally(() => {
+    logs.value = []
+  })
 }
 
 // 配置管理
@@ -307,8 +405,13 @@ const loadConfig = async () => {
   try {
     const res = await api.getConfig()
     if (res.data.code === 200) {
-      config.value = { ...res.data.data }
-      originalConfig.value = { ...res.data.data }
+      const incoming = { ...res.data.data }
+      incoming.platform = incoming.platform || 'boss'
+      incoming.pages_per_city_51job = incoming.pages_per_city_51job || 2
+      const codes = incoming.city_codes_51job || {}
+      incoming.city_codes_51job = Object.keys(codes).length > 0 ? codes : { ...defaultCityCodes51Job }
+      config.value = deepClone(incoming)
+      originalConfig.value = deepClone(incoming)
     }
   } catch (e) {
     console.error('加载配置失败', e)
@@ -320,10 +423,14 @@ const saveConfig = async () => {
   try {
     const res = await api.updateConfig(config.value)
     if (res.data.code === 200) {
-      config.value = { ...res.data.data }
-      originalConfig.value = { ...res.data.data }
+      const incoming = { ...res.data.data }
+      incoming.platform = incoming.platform || 'boss'
+      incoming.pages_per_city_51job = incoming.pages_per_city_51job || 2
+      const codes = incoming.city_codes_51job || {}
+      incoming.city_codes_51job = Object.keys(codes).length > 0 ? codes : { ...defaultCityCodes51Job }
+      config.value = deepClone(incoming)
+      originalConfig.value = deepClone(incoming)
       ElMessage.success('配置保存成功！')
-      addLog('✅ 配置已保存')
     } else {
       ElMessage.error(res.data.message || '保存失败')
     }
@@ -337,11 +444,14 @@ const saveConfig = async () => {
 
 const resetConfig = () => {
   config.value = {
+    platform: 'boss',
     keywords: ['Java', 'Python', '前端', '数据分析', '产品经理'],
     cities: ['北京', '上海', '广州', '深圳', '杭州'],
     pages_per_keyword: 2,
+    pages_per_city_51job: 2,
     delay_min: 3,
-    delay_max: 8
+    delay_max: 8,
+    city_codes_51job: { ...defaultCityCodes51Job }
   }
 }
 
@@ -371,6 +481,33 @@ const removeCity = (index) => {
   config.value.cities.splice(index, 1)
 }
 
+const cityCodeRows = computed(() => {
+  const obj = config.value.city_codes_51job || {}
+  return Object.keys(obj)
+    .sort((a, b) => a.localeCompare(b, 'zh-CN'))
+    .map(name => ({ name, code: obj[name] }))
+})
+
+const upsertCityCode = (name, code) => {
+  const n = String(name || '').trim()
+  const c = String(code || '').trim()
+  if (!n || !c) return
+  if (!config.value.city_codes_51job) config.value.city_codes_51job = {}
+  config.value.city_codes_51job[n] = c
+}
+
+const addCityCode = () => {
+  upsertCityCode(newCityCodeName.value, newCityCodeValue.value)
+  newCityCodeName.value = ''
+  newCityCodeValue.value = ''
+}
+
+const removeCityCode = (name) => {
+  if (config.value.city_codes_51job && Object.prototype.hasOwnProperty.call(config.value.city_codes_51job, name)) {
+    delete config.value.city_codes_51job[name]
+  }
+}
+
 const loadData = async () => {
   loading.value = true
   try {
@@ -379,18 +516,37 @@ const loadData = async () => {
       const data = res.data.data
       overview.value = data
       keywordCounts.value = data.keywordCounts || {}
-      if (data.status === 'running') {
-        addLog('🔄 爬虫正在运行...')
-      } else if (data.status === 'idle' && overview.value.status !== 'idle') {
-        addLog('✅ 爬虫运行完成！')
-      } else if (data.status === 'failed') {
-        addLog('❌ 爬虫运行失败')
-      }
+      logs.value = Array.isArray(data.logs) ? data.logs : []
+      setTimeout(() => {
+        if (logContainer.value) {
+          logContainer.value.scrollTop = logContainer.value.scrollHeight
+        }
+      }, 0)
     }
   } catch (e) {
     console.error('加载数据失败', e)
   } finally {
     loading.value = false
+  }
+}
+
+const confirmLogin = async () => {
+  try {
+    const res = await api.confirmCrawlerLogin()
+    if (res.data.code === 200) {
+      const payload = res.data.data || {}
+      if (payload.success === false) {
+        ElMessage.warning(payload.message || '当前无需确认')
+        return
+      }
+      ElMessage.success(payload.message || '已发送继续信号')
+      await loadData()
+    } else {
+      ElMessage.warning(res.data.message || '确认失败')
+    }
+  } catch (e) {
+    console.error('确认登录失败', e)
+    ElMessage.error('确认登录失败')
   }
 }
 
@@ -407,7 +563,7 @@ const startUpdate = async () => {
     const res = await api.startDataUpdate()
     if (res.data.code === 200) {
       ElMessage.success(res.data.data?.message || '更新任务已启动')
-      addLog('🚀 更新任务已启动，请稍候...')
+      await loadData()
       buttonDisabled.value = true
       disabledTimer = setTimeout(() => {
         buttonDisabled.value = false
@@ -430,8 +586,6 @@ onMounted(() => {
   pollTimer = setInterval(() => {
     loadData()
   }, 3000)
-  
-  addLog('📊 数据管理页面已加载')
 })
 
 onUnmounted(() => {

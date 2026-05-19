@@ -42,6 +42,10 @@ export default {
   getOverview(filters = {}) {
     return api.get('/jobs/stats/overview', { params: filters })
   },
+
+  getOverview51(filters = {}) {
+    return api.get('/jobs51/stats/overview', { params: filters })
+  },
   
   getCitySalary(filters = {}) {
     return api.get('/jobs/stats/city-salary', { params: filters })
@@ -65,6 +69,16 @@ export default {
   
   getJobPage(current, size, filters = {}) {
     return api.get('/jobs/page', {
+      params: {
+        current,
+        size,
+        ...filters
+      }
+    })
+  },
+
+  getJobPage51(current, size, filters = {}) {
+    return api.get('/jobs51/page', {
       params: {
         current,
         size,
@@ -108,6 +122,14 @@ export default {
 
   startDataUpdate() {
     return api.post('/data/update')
+  },
+
+  confirmCrawlerLogin() {
+    return api.post('/data/confirm-login')
+  },
+
+  clearCrawlerLogs() {
+    return api.post('/data/logs/clear')
   },
 
   // 配置管理相关

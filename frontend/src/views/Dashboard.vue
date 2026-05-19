@@ -229,25 +229,93 @@ const getApiFilters = () => {
   }
 }
 
+const mergeAvgStatList = (listA = [], listB = [], keyField) => {
+  const merged = new Map()
+
+  const add = (item) => {
+    if (!item) return
+    const key = item[keyField]
+    if (!key) return
+    const count = Number(item.count || 0)
+    const avgSalary = Number(item.avgSalary || 0)
+    const prev = merged.get(key) || { key, count: 0, sumSalary: 0 }
+    const next = {
+      key,
+      count: prev.count + count,
+      sumSalary: prev.sumSalary + avgSalary * count
+    }
+    merged.set(key, next)
+  }
+
+  ;(listA || []).forEach(add)
+  ;(listB || []).forEach(add)
+
+  return Array.from(merged.values()).map(v => ({
+    [keyField]: v.key,
+    count: v.count,
+    avgSalary: v.count > 0 ? Math.round((v.sumSalary / v.count) * 100) / 100 : 0
+  }))
+}
+
+const mergeCountList = (listA = [], listB = [], keyField) => {
+  const merged = new Map()
+
+  const add = (item) => {
+    if (!item) return
+    const key = item[keyField]
+    if (!key) return
+    const count = Number(item.count || 0)
+    merged.set(key, (merged.get(key) || 0) + count)
+  }
+
+  ;(listA || []).forEach(add)
+  ;(listB || []).forEach(add)
+
+  return Array.from(merged.entries()).map(([key, count]) => ({
+    [keyField]: key,
+    count
+  }))
+}
+
 const loadAllData = async () => {
   loading.value = true
   try {
-    const res = await api.getOverview(getApiFilters())
-    if (res.data.code === 200) {
-      const data = res.data.data
-      totalJobs.value = data.total || 0
-      cityData.value = data.citySalary || []
-      eduData.value = data.educationSalary || []
-      expData.value = data.experienceSalary || []
-      industryData.value = data.industry || []
-      keywordData.value = data.keywords || []
+    const filtersToSend = getApiFilters()
+    const [resBoss, res51] = await Promise.all([
+      api.getOverview(filtersToSend),
+      api.getOverview51(filtersToSend)
+    ])
 
-      if (cityOptions.value.length === 0) {
-        cityOptions.value = [...new Set(cityData.value.map(d => d.city))].sort()
-      }
+    const bossOk = resBoss?.data?.code === 200
+    const job51Ok = res51?.data?.code === 200
+
+    const boss = bossOk ? (resBoss.data.data || {}) : {}
+    const job51 = job51Ok ? (res51.data.data || {}) : {}
+
+    if (bossOk || job51Ok) {
+      totalJobs.value = Number(boss.total || 0) + Number(job51.total || 0)
+
+      cityData.value = mergeAvgStatList(boss.citySalary || [], job51.citySalary || [], 'city')
+        .sort((a, b) => (b.count || 0) - (a.count || 0))
+        .slice(0, 20)
+
+      eduData.value = mergeAvgStatList(boss.educationSalary || [], job51.educationSalary || [], 'education')
+      expData.value = mergeAvgStatList(boss.experienceSalary || [], job51.experienceSalary || [], 'experience')
+
+      industryData.value = mergeCountList(boss.industry || [], job51.industry || [], 'industry')
+        .sort((a, b) => (b.count || 0) - (a.count || 0))
+        .slice(0, 15)
+
+      keywordData.value = mergeCountList(boss.keywords || [], job51.keywords || [], 'keyword')
+        .sort((a, b) => (b.count || 0) - (a.count || 0))
+        .slice(0, 50)
+
+      cityOptions.value = [...new Set(cityData.value.map(d => d.city))].sort()
 
       calculateStats()
       updateCharts()
+    } else {
+      ElMessage.error('加载数据失败，请稍后重试')
     }
   } catch (e) {
     console.error('加载数据失败', e)

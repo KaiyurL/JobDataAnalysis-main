@@ -116,10 +116,21 @@ const experienceOptions = ref(['应届生', '1-3年', '3-5年', '5-10年', '10�
 
 const loadCityOptions = async () => {
   try {
-    const res = await api.getOverview()
-    if (res.data.code === 200 && res.data.data.citySalary) {
-      cityOptions.value = [...new Set(res.data.data.citySalary.map(d => d.city))].sort()
-    }
+    const [resBoss, res51] = await Promise.all([
+      api.getOverview(),
+      api.getOverview51()
+    ])
+
+    const bossOk = resBoss?.data?.code === 200
+    const job51Ok = res51?.data?.code === 200
+    const boss = bossOk ? (resBoss.data.data || {}) : {}
+    const job51 = job51Ok ? (res51.data.data || {}) : {}
+
+    const cities = [
+      ...(boss.citySalary || []).map(d => d.city),
+      ...(job51.citySalary || []).map(d => d.city)
+    ]
+    cityOptions.value = [...new Set(cities)].filter(Boolean).sort()
   } catch (e) {
     console.error('加载城市选项失败', e)
   }

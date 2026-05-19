@@ -147,20 +147,55 @@ const getApiFilters = () => {
   }
 }
 
+const mergeCountList = (listA = [], listB = [], keyField) => {
+  const merged = new Map()
+
+  const add = (item) => {
+    if (!item) return
+    const key = item[keyField]
+    if (!key) return
+    const count = Number(item.count || 0)
+    merged.set(key, (merged.get(key) || 0) + count)
+  }
+
+  ;(listA || []).forEach(add)
+  ;(listB || []).forEach(add)
+
+  return Array.from(merged.entries()).map(([key, count]) => ({
+    [keyField]: key,
+    count
+  }))
+}
+
 const loadData = async () => {
   loading.value = true
   try {
-    const res = await api.getOverview(getApiFilters())
-    if (res.data.code === 200) {
-      keywordData.value = res.data.data.keywords || []
-      
-      if (cityOptions.value.length === 0 && res.data.data.citySalary) {
-        cityOptions.value = [...new Set(res.data.data.citySalary.map(d => d.city))].sort()
-      }
+    const filtersToSend = getApiFilters()
+    const [resBoss, res51] = await Promise.all([
+      api.getOverview(filtersToSend),
+      api.getOverview51(filtersToSend)
+    ])
 
-      totalCount.value = keywordData.value.reduce((sum, item) => sum + item.count, 0)
-      
+    const bossOk = resBoss?.data?.code === 200
+    const job51Ok = res51?.data?.code === 200
+    const boss = bossOk ? (resBoss.data.data || {}) : {}
+    const job51 = job51Ok ? (res51.data.data || {}) : {}
+
+    if (bossOk || job51Ok) {
+      keywordData.value = mergeCountList(boss.keywords || [], job51.keywords || [], 'keyword')
+        .sort((a, b) => (b.count || 0) - (a.count || 0))
+        .slice(0, 50)
+
+      const cities = [
+        ...(boss.citySalary || []).map(d => d.city),
+        ...(job51.citySalary || []).map(d => d.city)
+      ]
+      cityOptions.value = [...new Set(cities)].filter(Boolean).sort()
+
+      totalCount.value = keywordData.value.reduce((sum, item) => sum + (item.count || 0), 0)
       updateCharts()
+    } else {
+      ElMessage.error('加载数据失败，请稍后重试')
     }
   } catch (e) {
     console.error('加载数据失败', e)

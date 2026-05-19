@@ -5,8 +5,11 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.jobdata.dto.*;
 import com.jobdata.entity.JobInfo;
+import com.jobdata.entity.JobInfo51Job;
 import com.jobdata.mapper.JobInfoMapper;
+import com.jobdata.service.JobInfo51JobService;
 import com.jobdata.service.JobInfoService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -15,6 +18,9 @@ import java.util.stream.Collectors;
 
 @Service
 public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> implements JobInfoService {
+
+    @Autowired
+    private JobInfo51JobService jobInfo51JobService;
 
     @Override
     public Page<JobInfo> pageQuery(Integer current, Integer size, String keyword, String city, String education, String experience) {
@@ -177,17 +183,51 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
         
         wrapper.isNotNull(JobInfo::getSalaryAvg);
         
-        List<JobInfo> similarJobs = this.list(wrapper);
+        List<JobInfo> bossSimilarJobs = this.list(wrapper);
+
+        LambdaQueryWrapper<JobInfo51Job> wrapper51 = new LambdaQueryWrapper<>();
+        if (StringUtils.hasText(request.getEducation())) {
+            wrapper51.eq(JobInfo51Job::getEducation, request.getEducation());
+        }
+        if (StringUtils.hasText(request.getExperience())) {
+            wrapper51.eq(JobInfo51Job::getExperience, request.getExperience());
+        }
+        if (StringUtils.hasText(request.getCity())) {
+            wrapper51.eq(JobInfo51Job::getCity, request.getCity());
+        }
+        if (StringUtils.hasText(request.getKeyword())) {
+            wrapper51.like(JobInfo51Job::getJobName, request.getKeyword());
+        }
+        wrapper51.isNotNull(JobInfo51Job::getSalaryAvg);
+
+        List<JobInfo51Job> job51SimilarJobs = jobInfo51JobService.list(wrapper51);
         
         SalaryPredictResponse response = new SalaryPredictResponse();
         
-        if (similarJobs.isEmpty()) {
+        if (bossSimilarJobs.isEmpty() && job51SimilarJobs.isEmpty()) {
             response.setSalaryMinPredicted(new java.math.BigDecimal(0));
             response.setSalaryMaxPredicted(new java.math.BigDecimal(0));
             response.setSimilarJobs(new ArrayList<>());
             return response;
         }
-        
+
+        List<JobInfo> similarJobs = new ArrayList<>();
+        similarJobs.addAll(bossSimilarJobs);
+        for (JobInfo51Job job : job51SimilarJobs) {
+            JobInfo mapped = new JobInfo();
+            mapped.setId(job.getId());
+            mapped.setJobName(job.getJobName());
+            mapped.setCompanyName(job.getCompanyName());
+            mapped.setCity(job.getCity());
+            mapped.setSalaryMin(job.getSalaryMin());
+            mapped.setSalaryMax(job.getSalaryMax());
+            mapped.setSalaryAvg(job.getSalaryAvg());
+            mapped.setExperience(job.getExperience());
+            mapped.setEducation(job.getEducation());
+            mapped.setJobUrl(job.getJobUrl());
+            similarJobs.add(mapped);
+        }
+
         List<Double> salaries = similarJobs.stream()
                 .filter(job -> job.getSalaryAvg() != null)
                 .map(job -> job.getSalaryAvg().doubleValue())
@@ -206,6 +246,7 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
         response.setSalaryMaxPredicted(new java.math.BigDecimal(Math.round(maxPred * 100.0) / 100.0));
         
         List<JobInfo> topSimilar = similarJobs.stream()
+                .filter(job -> job.getSalaryAvg() != null)
                 .sorted((a, b) -> b.getSalaryAvg().compareTo(a.getSalaryAvg()))
                 .limit(5)
                 .collect(Collectors.toList());
@@ -217,6 +258,7 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
     @Override
     public List<JobMatchResponse> matchJobs(JobMatchRequest request) {
         List<JobInfo> allJobs = this.list();
+        List<JobInfo51Job> allJobs51 = jobInfo51JobService.list();
         Set<String> userSkills = new HashSet<>(request.getSkills());
         
         List<JobMatchResponse> matches = new ArrayList<>();
@@ -254,6 +296,40 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
                 matches.add(resp);
             }
         }
+
+        for (JobInfo51Job job : allJobs51) {
+            Set<String> jobSkills = new HashSet<>();
+            if (StringUtils.hasText(job.getJobKeywords())) {
+                String[] keywords = job.getJobKeywords().split("[,，\\s]+");
+                for (String kw : keywords) {
+                    if (kw.length() >= 2) {
+                        jobSkills.add(kw);
+                    }
+                }
+            }
+
+            if (jobSkills.isEmpty()) {
+                continue;
+            }
+
+            Set<String> intersection = new HashSet<>(jobSkills);
+            intersection.retainAll(userSkills);
+
+            double matchScore = (double) intersection.size() / jobSkills.size();
+
+            if (matchScore > 0) {
+                JobMatchResponse resp = new JobMatchResponse();
+                resp.setId(job.getId());
+                resp.setJobName(job.getJobName());
+                resp.setCompanyName(job.getCompanyName());
+                resp.setSalaryMin(job.getSalaryMin());
+                resp.setSalaryMax(job.getSalaryMax());
+                resp.setSalaryAvg(job.getSalaryAvg());
+                resp.setCity(job.getCity());
+                resp.setMatchScore(matchScore);
+                matches.add(resp);
+            }
+        }
         
         return matches.stream()
                 .sorted((a, b) -> Double.compare(b.getMatchScore(), a.getMatchScore()))
@@ -264,9 +340,21 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
     @Override
     public List<String> getAllSkills() {
         List<JobInfo> allJobs = this.list();
+        List<JobInfo51Job> allJobs51 = jobInfo51JobService.list();
         Map<String, Integer> skillCount = new HashMap<>();
         
         for (JobInfo job : allJobs) {
+            if (StringUtils.hasText(job.getJobKeywords())) {
+                String[] keywords = job.getJobKeywords().split("[,，\\s]+");
+                for (String kw : keywords) {
+                    if (kw.length() >= 2) {
+                        skillCount.put(kw, skillCount.getOrDefault(kw, 0) + 1);
+                    }
+                }
+            }
+        }
+
+        for (JobInfo51Job job : allJobs51) {
             if (StringUtils.hasText(job.getJobKeywords())) {
                 String[] keywords = job.getJobKeywords().split("[,，\\s]+");
                 for (String kw : keywords) {
@@ -285,15 +373,23 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
 
     @Override
     public List<CompanyHotDTO> getCompanyHotStats() {
-        List<JobInfo> allJobs = this.list();
-        Map<String, List<JobInfo>> companyMap = allJobs.stream()
-                .filter(job -> StringUtils.hasText(job.getCompanyName()))
-                .collect(Collectors.groupingBy(JobInfo::getCompanyName));
-        
-        return companyMap.entrySet().stream().map(entry -> {
+        Map<String, Integer> companyCount = new HashMap<>();
+
+        for (JobInfo job : this.list()) {
+            if (StringUtils.hasText(job.getCompanyName())) {
+                companyCount.put(job.getCompanyName(), companyCount.getOrDefault(job.getCompanyName(), 0) + 1);
+            }
+        }
+        for (JobInfo51Job job : jobInfo51JobService.list()) {
+            if (StringUtils.hasText(job.getCompanyName())) {
+                companyCount.put(job.getCompanyName(), companyCount.getOrDefault(job.getCompanyName(), 0) + 1);
+            }
+        }
+
+        return companyCount.entrySet().stream().map(entry -> {
             CompanyHotDTO dto = new CompanyHotDTO();
             dto.setCompanyName(entry.getKey());
-            dto.setCount(entry.getValue().size());
+            dto.setCount(entry.getValue());
             return dto;
         }).sorted((a, b) -> b.getCount().compareTo(a.getCount()))
           .limit(10)
@@ -302,37 +398,56 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
 
     @Override
     public List<CompanySalaryDTO> getCompanySalaryStats() {
-        List<JobInfo> allJobs = this.list();
-        Map<String, List<JobInfo>> companyMap = allJobs.stream()
-                .filter(job -> StringUtils.hasText(job.getCompanyName()) && job.getSalaryAvg() != null)
-                .collect(Collectors.groupingBy(JobInfo::getCompanyName));
-        
-        return companyMap.entrySet().stream()
-                .filter(entry -> entry.getValue().size() >= 2)  // 至少有2个岗位才统计
+        Map<String, double[]> agg = new HashMap<>();
+
+        for (JobInfo job : this.list()) {
+            if (StringUtils.hasText(job.getCompanyName()) && job.getSalaryAvg() != null) {
+                double[] v = agg.computeIfAbsent(job.getCompanyName(), k -> new double[]{0, 0});
+                v[0] += job.getSalaryAvg().doubleValue();
+                v[1] += 1;
+            }
+        }
+        for (JobInfo51Job job : jobInfo51JobService.list()) {
+            if (StringUtils.hasText(job.getCompanyName()) && job.getSalaryAvg() != null) {
+                double[] v = agg.computeIfAbsent(job.getCompanyName(), k -> new double[]{0, 0});
+                v[0] += job.getSalaryAvg().doubleValue();
+                v[1] += 1;
+            }
+        }
+
+        return agg.entrySet().stream()
+                .filter(entry -> entry.getValue()[1] >= 2)
                 .map(entry -> {
                     CompanySalaryDTO dto = new CompanySalaryDTO();
                     dto.setCompanyName(entry.getKey());
-                    double avg = entry.getValue().stream()
-                            .mapToDouble(job -> job.getSalaryAvg().doubleValue())
-                            .average().orElse(0);
+                    double avg = entry.getValue()[0] / entry.getValue()[1];
                     dto.setAvgSalary(Math.round(avg * 100.0) / 100.0);
                     return dto;
-                }).sorted((a, b) -> Double.compare(b.getAvgSalary(), a.getAvgSalary()))
-                  .limit(10)
-                  .collect(Collectors.toList());
+                })
+                .sorted((a, b) -> Double.compare(b.getAvgSalary(), a.getAvgSalary()))
+                .limit(10)
+                .collect(Collectors.toList());
     }
 
     @Override
     public List<CompanySizeDTO> getCompanySizeStats() {
-        List<JobInfo> allJobs = this.list();
-        Map<String, List<JobInfo>> sizeMap = allJobs.stream()
-                .filter(job -> StringUtils.hasText(job.getCompanySize()))
-                .collect(Collectors.groupingBy(JobInfo::getCompanySize));
-        
-        return sizeMap.entrySet().stream().map(entry -> {
+        Map<String, Integer> sizeCount = new HashMap<>();
+
+        for (JobInfo job : this.list()) {
+            if (StringUtils.hasText(job.getCompanySize())) {
+                sizeCount.put(job.getCompanySize(), sizeCount.getOrDefault(job.getCompanySize(), 0) + 1);
+            }
+        }
+        for (JobInfo51Job job : jobInfo51JobService.list()) {
+            if (StringUtils.hasText(job.getCompanySize())) {
+                sizeCount.put(job.getCompanySize(), sizeCount.getOrDefault(job.getCompanySize(), 0) + 1);
+            }
+        }
+
+        return sizeCount.entrySet().stream().map(entry -> {
             CompanySizeDTO dto = new CompanySizeDTO();
             dto.setSize(entry.getKey());
-            dto.setCount(entry.getValue().size());
+            dto.setCount(entry.getValue());
             return dto;
         }).sorted((a, b) -> b.getCount().compareTo(a.getCount()))
           .collect(Collectors.toList());

@@ -2,7 +2,7 @@
   <div class="job-analysis" id="job-analysis-content">
     <div class="page-header">
       <div class="header-left">
-        <h1>💼 岗位分析</h1>
+        <h1>💼 岗位分析{{ is51Job ? ' (前程无忧)' : ' (BOSS直聘)' }}</h1>
         <p>详细展示所有招聘岗位信息，支持筛选、搜索和导出</p>
       </div>
       <el-button type="primary" @click="handleExportPDF" :loading="exportingPdf">
@@ -92,12 +92,22 @@
         </el-table-column>
         <el-table-column prop="companyIndustry" label="行业" min-width="150" show-overflow-tooltip />
         <el-table-column prop="companySize" label="公司规模" width="120" />
-        <el-table-column prop="companyWelfare" label="公司福利" min-width="200" show-overflow-tooltip />
         <el-table-column prop="jobDesc" label="工作介绍" min-width="320">
           <template #default="{ row }">
             <span v-if="row.jobDesc" class="desc-preview" :title="row.jobDesc">{{ formatDescPreview(row.jobDesc) }}</span>
             <el-button v-if="row.jobDesc && row.jobDesc.length > 60" link type="primary" @click="openDesc(row)">查看</el-button>
             <span v-else-if="!row.jobDesc">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="companyWelfare" label="公司福利" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="jobUrl" label="招聘路径" min-width="280">
+          <template #default="{ row }">
+            <span v-if="row.jobUrl" class="url-cell">
+              <span class="url-preview" :title="normalizeJobUrl(row.jobUrl)">{{ formatUrlPreview(row.jobUrl) }}</span>
+              <el-link :href="normalizeJobUrl(row.jobUrl)" target="_blank" rel="noopener noreferrer" type="primary">打开</el-link>
+              <el-button link type="primary" @click="copyUrl(row.jobUrl)">复制</el-button>
+            </span>
+            <span v-else>-</span>
           </template>
         </el-table-column>
       </el-table>
@@ -121,7 +131,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Search, RefreshLeft, Download, Document } from '@element-plus/icons-vue'
 import api from '../api.js'
@@ -129,6 +139,7 @@ import { ElMessage } from 'element-plus'
 import { exportToPDFMultiPage } from '../utils/exportPdf.js'
 
 const route = useRoute()
+const is51Job = computed(() => route.meta?.source === '51job')
 
 const loading = ref(false)
 const exporting = ref(false)
@@ -177,7 +188,9 @@ const getApiFilters = () => {
 const loadJobs = async () => {
   loading.value = true
   try {
-    const res = await api.getJobPage(currentPage.value, pageSize.value, getApiFilters())
+    const res = is51Job.value
+      ? await api.getJobPage51(currentPage.value, pageSize.value, getApiFilters())
+      : await api.getJobPage(currentPage.value, pageSize.value, getApiFilters())
     if (res.data.code === 200) {
       jobs.value = res.data.data.records || []
       total.value = res.data.data.total || 0
@@ -192,7 +205,7 @@ const loadJobs = async () => {
 
 const loadCityOptions = async () => {
   try {
-    const res = await api.getOverview()
+    const res = is51Job.value ? await api.getOverview51() : await api.getOverview()
     if (res.data.code === 200 && res.data.data.citySalary) {
       cityOptions.value = [...new Set(res.data.data.citySalary.map(d => d.city))].sort()
     }
@@ -234,6 +247,43 @@ const formatDescPreview = (desc) => {
   return normalized.length > 60 ? normalized.slice(0, 60) + '...' : normalized
 }
 
+const normalizeJobUrl = (url) => {
+  const normalized = String(url || '').trim()
+  if (!normalized) return ''
+  if (normalized.startsWith('//')) return `https:${normalized}`
+  return normalized
+}
+
+const formatUrlPreview = (url) => {
+  const normalized = normalizeJobUrl(url)
+  if (!normalized) return '-'
+  return normalized.length > 48 ? normalized.slice(0, 48) + '...' : normalized
+}
+
+const copyUrl = async (url) => {
+  const normalized = normalizeJobUrl(url)
+  if (!normalized) return
+  try {
+    await navigator.clipboard.writeText(normalized)
+    ElMessage.success('已复制招聘路径')
+  } catch (e) {
+    try {
+      const textarea = document.createElement('textarea')
+      textarea.value = normalized
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.focus()
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      ElMessage.success('已复制招聘路径')
+    } catch (err) {
+      ElMessage.error('复制失败，请手动复制')
+    }
+  }
+}
+
 const openDesc = (row) => {
   descDialogTitle.value = `${row.jobName || '岗位'} - 工作介绍`
   descDialogContent.value = row.jobDesc || ''
@@ -243,7 +293,9 @@ const openDesc = (row) => {
 const handleExport = async () => {
   exporting.value = true
   try {
-    const res = await api.getJobPage(1, 10000, getApiFilters())
+    const res = is51Job.value
+      ? await api.getJobPage51(1, 10000, getApiFilters())
+      : await api.getJobPage(1, 10000, getApiFilters())
     if (res.data.code === 200) {
       const dataToExport = res.data.data.records || []
       exportToCSV(dataToExport)
@@ -258,7 +310,7 @@ const handleExport = async () => {
 }
 
 const exportToCSV = (data) => {
-  const headers = ['岗位名称', '公司名称', '城市', '最低薪资(K)', '最高薪资(K)', '学历', '经验', '行业', '公司规模', '公司福利', '工作介绍']
+  const headers = ['岗位名称', '公司名称', '城市', '最低薪资(K)', '最高薪资(K)', '学历', '经验', '行业', '公司规模', '工作介绍', '公司福利', '招聘路径']
   const rows = data.map(job => [
     job.jobName || '',
     job.companyName || '',
@@ -269,8 +321,9 @@ const exportToCSV = (data) => {
     job.experience || '',
     job.companyIndustry || '',
     job.companySize || '',
+    job.jobDesc || '',
     job.companyWelfare || '',
-    job.jobDesc || ''
+    normalizeJobUrl(job.jobUrl) || ''
   ])
 
   let csvContent = '\uFEFF'
@@ -318,6 +371,26 @@ onMounted(() => {
   loadCityOptions()
   loadJobs()
 })
+
+watch(
+  () => route.meta?.source,
+  () => {
+    currentPage.value = 1
+    loadCityOptions()
+    loadJobs()
+  }
+)
+
+watch(
+  () => route.query.city,
+  (city) => {
+    if (city) {
+      filters.value.selectedCities = [city]
+      currentPage.value = 1
+      loadJobs()
+    }
+  }
+)
 </script>
 
 <style scoped>
@@ -377,6 +450,22 @@ onMounted(() => {
 .desc-preview {
   display: inline-block;
   max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+.url-cell {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  max-width: 100%;
+}
+
+.url-preview {
+  display: inline-block;
+  max-width: 170px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

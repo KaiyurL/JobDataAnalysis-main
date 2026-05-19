@@ -32,4 +32,22 @@ public class DataManageController {
             return Result.error("启动更新失败: " + e.getMessage());
         }
     }
+
+    @PostMapping("/confirm-login")
+    public Result<Map<String, Object>> confirmLogin() {
+        try {
+            return Result.success(dataManageService.confirmLogin());
+        } catch (Exception e) {
+            return Result.error("确认登录失败: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/logs/clear")
+    public Result<Map<String, Object>> clearLogs() {
+        try {
+            return Result.success(dataManageService.clearLogs());
+        } catch (Exception e) {
+            return Result.error("清空日志失败: " + e.getMessage());
+        }
+    }
 }

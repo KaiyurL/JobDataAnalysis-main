@@ -8,6 +8,8 @@ import json
 import os
 import glob
 import tempfile
+import sys
+import argparse
 from datetime import datetime
 from urllib.parse import quote
 
@@ -25,6 +27,32 @@ DB_CONFIG = {
 }
 
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'config.json')
+
+API_51JOB_BASE = "https://we.51job.com/api/job/search-pc"
+
+DEFAULT_CITY_CODES_51JOB = {
+    "北京": "010000",
+    "上海": "020000",
+    "广州": "030200",
+    "深圳": "040000",
+    "杭州": "080200",
+    "苏州": "070300",
+    "南京": "070200",
+    "成都": "090200",
+    "武汉": "180200",
+    "西安": "200200",
+    "重庆": "060000",
+    "天津": "050000",
+    "郑州": "170200",
+    "长沙": "190200",
+    "青岛": "120200",
+    "大连": "230200",
+    "厦门": "110200",
+    "宁波": "080300",
+    "无锡": "070400",
+    "合肥": "150200",
+    "福州": "110300"
+}
 
 def find_chrome_path():
     candidates = [
@@ -140,11 +168,14 @@ def get_city_code(city_name):
 
 def load_config():
     default_config = {
+        "platform": "boss",
         "keywords": ["Java", "Python", "前端", "数据分析", "产品经理"],# 关键词
         "cities": ["北京", "上海", "广州", "深圳", "杭州","福州"],# 城市
         "pages_per_keyword": 2,# 每个关键词爬取的页数
+        "pages_per_city_51job": 2,
         "delay_min": 3,# 最小延迟时间（秒）
-        "delay_max": 8# 最大延迟时间（秒）
+        "delay_max": 8,# 最大延迟时间（秒）
+        "city_codes_51job": DEFAULT_CITY_CODES_51JOB
     }
     
     if os.path.exists(CONFIG_FILE):
@@ -160,9 +191,54 @@ def load_config():
 def parse_salary(salary_text):
     if not salary_text:
         return None, None
-    match = re.search(r'(\d+)-(\d+)K', salary_text)
+    text = str(salary_text).strip()
+
+    match = re.search(r'(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*K', text, flags=re.IGNORECASE)
     if match:
-        return int(match.group(1)), int(match.group(2))
+        return int(float(match.group(1))), int(float(match.group(2)))
+
+    match = re.search(r'(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*万/年', text)
+    if match:
+        low = float(match.group(1)) * 10000 / 12 / 1000
+        high = float(match.group(2)) * 10000 / 12 / 1000
+        return int(round(low)), int(round(high))
+
+    match = re.search(r'(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*万', text)
+    if match:
+        low = float(match.group(1)) * 10
+        high = float(match.group(2)) * 10
+        return int(round(low)), int(round(high))
+
+    match = re.search(r'(\d+(?:\.\d+)?)\s*千\s*-\s*(\d+(?:\.\d+)?)\s*千', text)
+    if match:
+        return int(round(float(match.group(1)))), int(round(float(match.group(2))))
+
+    match = re.search(r'(\d+(?:\.\d+)?)\s*千\s*-\s*(\d+(?:\.\d+)?)\s*万', text)
+    if match:
+        low = float(match.group(1))
+        high = float(match.group(2)) * 10
+        return int(round(low)), int(round(high))
+
+    match = re.search(r'(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*千', text)
+    if match:
+        return int(round(float(match.group(1)))), int(round(float(match.group(2))))
+
+    match = re.search(r'(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*万', text)
+    if match:
+        low = float(match.group(1)) * 10
+        high = float(match.group(2)) * 10
+        return int(round(low)), int(round(high))
+
+    match = re.search(r'(\d+(?:\.\d+)?)\s*千', text)
+    if match:
+        val = int(round(float(match.group(1))))
+        return val, val
+
+    match = re.search(r'(\d+(?:\.\d+)?)\s*万', text)
+    if match:
+        val = int(round(float(match.group(1)) * 10))
+        return val, val
+
     return None, None
 
 def parse_city(city_text):
@@ -187,24 +263,179 @@ def extract_keywords(text):
     keywords = [w for w in words if len(w) >= 2 and w not in stop_words]
     return ','.join(keywords[:20])
 
-def insert_job(job_data):
+def get_city_code_51job(city_name, config):
+    codes = (config or {}).get("city_codes_51job") or {}
+    code = codes.get(city_name) if isinstance(codes, dict) else None
+    if not code:
+        code = DEFAULT_CITY_CODES_51JOB.get(city_name)
+    return str(code).strip() if code is not None and str(code).strip() else None
+
+def ensure_51job_cookies(page, city_code):
+    url = (
+        f"https://we.51job.com/pc/search?keyword=&keywordType=2"
+        f"&jobArea={city_code}&issuedDate=4&pageNum=1&pageSize=20"
+    )
+    page.get(url)
+    time.sleep(3)
+
+    ok = False
+    for _ in range(15):
+        try:
+            cnt = page.run_js("return document.querySelectorAll('.joblist-item').length")
+        except Exception:
+            cnt = 0
+        if isinstance(cnt, int) and cnt >= 5:
+            ok = True
+            break
+        time.sleep(1)
+
+    if not ok:
+        print()
+        print("请在浏览器中完成前程无忧验证/等待列表加载，然后按回车键继续...")
+        input()
+
+    cookies_list = []
+    try:
+        cookies_list = page.cookies()
+    except Exception:
+        cookies_list = []
+
+    cookies = {}
+    for c in cookies_list or []:
+        name = c.get("name")
+        value = c.get("value")
+        if name and value is not None:
+            cookies[name] = value
+    return cookies if cookies else None
+
+def build_51job_params(keyword, city_code, page_num, page_size=20):
+    ts = int(time.time() * 1000)
+    return {
+        "api_key": "51job",
+        "timestamp": ts,
+        "keyword": keyword or "",
+        "searchType": "2",
+        "function": "",
+        "industry": "",
+        "jobArea": city_code,
+        "jobArea2": "",
+        "landmark": "",
+        "metro": "",
+        "salary": "",
+        "workYear": "",
+        "degree": "",
+        "companyType": "",
+        "companySize": "",
+        "jobType": "",
+        "issueDate": "4",
+        "sortType": "0",
+        "pageNum": int(page_num),
+        "requestId": "",
+        "keywordType": "2",
+        "pageSize": str(page_size),
+        "source": "1",
+        "accountId": "",
+        "pageCode": "sou|sou|soulb",
+        "scene": "7"
+    }
+
+_tables_ready = False
+
+def ensure_mysql_tables():
+    global _tables_ready
+    if _tables_ready:
+        return
+
     conn = pymysql.connect(**DB_CONFIG)
     try:
         with conn.cursor() as cursor:
-            sql = '''
-            INSERT INTO job_info 
-            (job_name, company_name, city, salary_min, salary_max, salary_avg, 
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS job_info (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                job_name VARCHAR(255),
+                company_name VARCHAR(255),
+                city VARCHAR(100),
+                job_url VARCHAR(512),
+                salary_min INT,
+                salary_max INT,
+                salary_avg DECIMAL(10,2),
+                experience VARCHAR(100),
+                education VARCHAR(100),
+                job_desc MEDIUMTEXT,
+                job_keywords TEXT,
+                company_size VARCHAR(100),
+                company_industry VARCHAR(255),
+                company_welfare TEXT,
+                publish_date DATE,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
+
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS job_info_51job (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                job_name VARCHAR(255),
+                company_name VARCHAR(255),
+                city VARCHAR(100),
+                job_url VARCHAR(512),
+                salary_min INT,
+                salary_max INT,
+                salary_avg DECIMAL(10,2),
+                experience VARCHAR(100),
+                education VARCHAR(100),
+                job_desc MEDIUMTEXT,
+                job_keywords TEXT,
+                company_size VARCHAR(100),
+                company_industry VARCHAR(255),
+                company_welfare TEXT,
+                publish_date DATE,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
+
+            cursor.execute(
+                "SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME IN ('job_info','job_info_51job')",
+                (DB_CONFIG["database"],),
+            )
+            cols = cursor.fetchall()
+            by_table = {"job_info": set(), "job_info_51job": set()}
+            for t, c in cols:
+                if t in by_table:
+                    by_table[t].add(c)
+            if "job_url" not in by_table["job_info"]:
+                cursor.execute("ALTER TABLE job_info ADD COLUMN job_url VARCHAR(512)")
+            if "job_url" not in by_table["job_info_51job"]:
+                cursor.execute("ALTER TABLE job_info_51job ADD COLUMN job_url VARCHAR(512)")
+        conn.commit()
+        _tables_ready = True
+    except Exception as e:
+        print(f"创建数据表失败: {e}")
+        raise
+    finally:
+        conn.close()
+
+def _insert_job(table_name, job_data):
+    ensure_mysql_tables()
+    conn = pymysql.connect(**DB_CONFIG)
+    try:
+        with conn.cursor() as cursor:
+            sql = f'''
+            INSERT INTO {table_name} 
+            (job_name, company_name, city, job_url, salary_min, salary_max, salary_avg, 
              experience, education, job_desc, job_keywords, company_size, company_industry, company_welfare, publish_date)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             '''
             salary_avg = None
             if job_data['salary_min'] and job_data['salary_max']:
                 salary_avg = round((job_data['salary_min'] + job_data['salary_max']) / 2, 2)
+
+            publish_date = job_data.get("publish_date") or datetime.now().date()
             
             cursor.execute(sql, (
                 job_data['job_name'], # 岗位名称
                 job_data['company_name'], # 公司名称
                 job_data['city'], # 城市
+                job_data.get('job_url'),
                 job_data['salary_min'],# 薪资下限
                 job_data['salary_max'],# 薪资上限
                 salary_avg, # 薪资平均值
@@ -215,7 +446,7 @@ def insert_job(job_data):
                 job_data['company_size'], # 公司规模
                 job_data['company_industry'], # 公司行业
                 job_data.get('company_welfare'),
-                datetime.now().date() # 发布日期
+                publish_date # 发布日期
             ))
         conn.commit()
         return True
@@ -226,40 +457,61 @@ def insert_job(job_data):
     finally:
         conn.close()
 
+def insert_job_boss(job_data):
+    return _insert_job("job_info", job_data)
+
+def insert_job_51job(job_data):
+    return _insert_job("job_info_51job", job_data)
+
 def random_delay(min_sec, max_sec):
     delay = random.uniform(min_sec, max_sec)
     print(f"等待 {delay:.1f} 秒...")
     time.sleep(delay)
 
-def scrape_jobs():
+def scrape_jobs(platform_override=None):
     config = load_config()
-    KEYWORDS = config.get("keywords", ["Java", "Python", "前端", "数据分析", "产品经理","数据挖掘","全栈","后端","Ai","计算机"])# 关键词
-    CITIES = config.get("cities", ["北京", "上海", "广州", "深圳", "杭州","福州"])# 城市
-    PAGES_PER_KEYWORD = config.get("pages_per_keyword", 2)# 每个关键词爬取的页数
-    DELAY_MIN = config.get("delay_min", 3)# 最小延迟时间（秒）
-    DELAY_MAX = config.get("delay_max", 8)# 最大延迟时间（秒）
-    
+    platform = str(platform_override or config.get("platform", "boss")).strip().lower()
+    if sys.stdin.isatty() and not platform_override:
+        selected = input(f"请选择数据源(boss/51job/both) [默认 {platform}]: ").strip().lower()
+        if selected in ("boss", "51job", "both"):
+            platform = selected
+    KEYWORDS = config.get("keywords", ["Java", "Python", "前端", "数据分析", "产品经理"])
+    CITIES = config.get("cities", ["北京", "上海", "广州", "深圳", "杭州"])
+    PAGES_PER_KEYWORD = int(config.get("pages_per_keyword", 2))
+    PAGES_PER_CITY_51JOB = int(config.get("pages_per_city_51job", 2))
+    DELAY_MIN = int(config.get("delay_min", 3))
+    DELAY_MAX = int(config.get("delay_max", 8))
+
     total_inserted = 0
-    
+
     print()
-    print("="*60)
-    print("BOSS 直聘招聘数据爬虫 (DrissionPage版)")
-    print("="*60)
+    print("=" * 60)
+    print("招聘数据爬虫 (DrissionPage版)")
+    print("=" * 60)
     print()
-    print(f"配置:")
+
+    try:
+        ensure_mysql_tables()
+        print("已确保数据表存在: job_info / job_info_51job")
+    except Exception:
+        return
+
+    print("配置:")
+    print(f"  数据源: {platform}")
     print(f"  关键词: {', '.join(KEYWORDS)}")
     print(f"  城市: {', '.join(CITIES)}")
-    print(f"  每关键词页数: {PAGES_PER_KEYWORD}")
+    print(f"  Boss每关键词页数: {PAGES_PER_KEYWORD}")
+    print(f"  51job每城市页数: {PAGES_PER_CITY_51JOB}")
     print(f"  延迟范围: {DELAY_MIN}-{DELAY_MAX} 秒")
     print()
     print("正在启动浏览器...")
-    
+
     chrome_path = find_chrome_path()
     if not chrome_path:
         print("未找到可用的 Chrome/Chromium 可执行文件。")
         return
 
-    tmp_path = os.path.join(os.path.dirname(__file__), 'tmp')
+    tmp_path = os.path.join(os.path.dirname(__file__), "tmp")
     os.makedirs(tmp_path, exist_ok=True)
 
     options = ChromiumOptions(read_file=False)
@@ -285,152 +537,306 @@ def scrape_jobs():
             print()
             print("启动后再运行 python spider.py。")
             return
-    
-    print()
-    print("浏览器已启动，正在打开 BOSS 直聘...")
-    page.get('https://www.zhipin.com')
-    time.sleep(2)
-    
-    print()
-    print("请确认浏览器中是否已登录 BOSS 直聘？")
-    print("如果没有登录，请先手动登录，然后按回车键继续...")
-    input()
 
-    print()
-    print("开始爬取...")
-    print()
-
-    session = None
-
-    print("正在启动网络监听...")
-    page.listen.start('joblist')
-    
-    for keyword in KEYWORDS:
-        for city in CITIES:
+    try:
+        if platform in ("boss", "both"):
             print()
-            print("="*60)
-            print(f"正在爬取: 关键词={keyword}, 城市={city}")
-            print("="*60)
-            
-            city_code = get_city_code(city)
+            print("浏览器已启动，正在打开 BOSS 直聘...")
+            page.get("https://www.zhipin.com")
+            time.sleep(2)
 
-            if session is None:
-                session = create_session_from_page(page, keyword, city_code)
+            print()
+            print("请确认浏览器中是否已登录 BOSS 直聘？")
+            print("如果没有登录，请先手动登录，然后按回车键继续...")
+            input()
 
-            for page_num in range(1, PAGES_PER_KEYWORD + 1):
-                try:
-                    url = f'https://www.zhipin.com/web/geek/job?query={keyword}&city={city_code}&page={page_num}'
-                    print(f"\n正在访问第 {page_num} 页: {url}")
-                    
-                    page.get(url)
-                    random_delay(DELAY_MIN, DELAY_MAX)
-                    
-                    packet = None
-                    try:
-                        packet = page.listen.wait(timeout=10)
-                    except:
-                        print("等待数据包超时，尝试继续...")
-                    
-                    job_list = []
-                    if packet and packet.response:
+            print()
+            print("开始爬取 BOSS 直聘...")
+            print()
+
+            session = None
+            print("正在启动网络监听...")
+            page.listen.start("joblist")
+
+            for keyword in KEYWORDS:
+                for city in CITIES:
+                    print()
+                    print("=" * 60)
+                    print(f"正在爬取(BOSS): 关键词={keyword}, 城市={city}")
+                    print("=" * 60)
+
+                    city_code = get_city_code(city)
+                    session = create_session_from_page(page, keyword, city_code)
+
+                    for page_num in range(1, PAGES_PER_KEYWORD + 1):
                         try:
-                            data = packet.response.body
-                            json_data = json.loads(data) if isinstance(data, str) else data
-                            
-                            if json_data.get('code') == 0:
-                                zp_data = json_data.get('zpData', {})
-                                job_list = zp_data.get('jobList', [])
-                        except Exception as e:
-                            print(f"解析响应失败: {e}")
-                    
-                    print(f"找到 {len(job_list)} 个岗位")
-                    
-                    for idx, job_item in enumerate(job_list):
-                        try:
-                            job_name = job_item.get('jobName', '')
-                            company_name = job_item.get('brandName', '') or job_item.get('companyName', '')
-                            salary_text = job_item.get('salaryDesc', '')
-                            city_text = job_item.get('cityName', '')
-                            experience = job_item.get('jobExperience', '')
-                            education = job_item.get('jobDegree', '')
-                            
-                            company_size = (
-                                job_item.get('brandScaleName', '') or
-                                job_item.get('brandScale', '') or 
-                                job_item.get('companySize', '') or 
-                                job_item.get('scale', '')
-                            )
-                            company_industry = (
-                                job_item.get('brandIndustry', '') or 
-                                job_item.get('companyIndustry', '') or 
-                                job_item.get('industry', '')
-                            )
+                            url = f"https://www.zhipin.com/web/geek/job?query={keyword}&city={city_code}&page={page_num}"
+                            print(f"\n正在访问第 {page_num} 页: {url}")
 
-                            welfare = job_item.get('welfareList') or job_item.get('welfare') or job_item.get('welfareName')
-                            if isinstance(welfare, list):
-                                welfare = ','.join([str(x).strip() for x in welfare if str(x).strip()])
-                            elif welfare is not None:
-                                welfare = str(welfare).strip() or None
-                            
-                            security_id = job_item.get('securityId', '')
-                            encrypt_job_id = job_item.get('encryptJobId', '')
-                            referer = f'https://www.zhipin.com/job_detail/{encrypt_job_id}.html' if encrypt_job_id else None
-                            detail_desc = fetch_job_detail_desc(session, page, security_id, referer) if session else None
-                            job_desc = detail_desc or job_item.get('jobDesc', '') or job_item.get('jobDetail', '') or job_name
-                            
-                            salary_min, salary_max = parse_salary(salary_text)
-                            clean_city = parse_city(city_text)
-                            clean_education = parse_education(education)
-                            skills = job_item.get('skills')
-                            if isinstance(skills, list):
-                                keywords = ','.join([str(x).strip() for x in skills if str(x).strip()])
-                            elif isinstance(skills, str) and skills.strip():
-                                keywords = skills.strip()
-                            else:
-                                keywords = extract_keywords(job_desc)
-                            
-                            job_data = {
-                                'job_name': job_name,
-                                'company_name': company_name,
-                                'city': clean_city,
-                                'salary_min': salary_min,
-                                'salary_max': salary_max,
-                                'experience': experience,
-                                'education': clean_education,
-                                'job_desc': job_desc,
-                                'job_keywords': keywords,
-                                'company_size': company_size,
-                                'company_industry': company_industry,
-                                'company_welfare': welfare
-                            }
-                            
-                            if job_name and company_name:
-                                if insert_job(job_data):
-                                    print(f"✓ {job_name} @ {company_name}")
-                                    total_inserted += 1
-                        except Exception as e:
-                            print(f"提取失败: {e}")
-                            import traceback
-                            traceback.print_exc()
+                            page.get(url)
+                            random_delay(DELAY_MIN, DELAY_MAX)
+
+                            packet = None
+                            try:
+                                packet = page.listen.wait(timeout=10)
+                            except Exception:
+                                print("等待数据包超时，尝试继续...")
+
+                            job_list = []
+                            if packet and packet.response:
+                                try:
+                                    data = packet.response.body
+                                    json_data = json.loads(data) if isinstance(data, str) else data
+                                    if json_data.get("code") == 0:
+                                        zp_data = json_data.get("zpData", {})
+                                        job_list = zp_data.get("jobList", [])
+                                except Exception as ex:
+                                    print(f"解析响应失败: {ex}")
+
+                            print(f"找到 {len(job_list)} 个岗位")
+
+                            for job_item in job_list:
+                                try:
+                                    job_name = job_item.get("jobName", "")
+                                    company_name = job_item.get("brandName", "") or job_item.get("companyName", "")
+                                    salary_text = job_item.get("salaryDesc", "")
+                                    city_text = job_item.get("cityName", "")
+                                    experience = job_item.get("jobExperience", "")
+                                    education = job_item.get("jobDegree", "")
+
+                                    company_size = (
+                                        job_item.get("brandScaleName", "")
+                                        or job_item.get("brandScale", "")
+                                        or job_item.get("companySize", "")
+                                        or job_item.get("scale", "")
+                                    )
+                                    company_industry = (
+                                        job_item.get("brandIndustry", "")
+                                        or job_item.get("companyIndustry", "")
+                                        or job_item.get("industry", "")
+                                    )
+
+                                    welfare = job_item.get("welfareList") or job_item.get("welfare") or job_item.get("welfareName")
+                                    if isinstance(welfare, list):
+                                        welfare = ",".join([str(x).strip() for x in welfare if str(x).strip()])
+                                    elif welfare is not None:
+                                        welfare = str(welfare).strip() or None
+
+                                    security_id = job_item.get("securityId", "")
+                                    encrypt_job_id = job_item.get("encryptJobId", "")
+                                    referer = f"https://www.zhipin.com/job_detail/{encrypt_job_id}.html" if encrypt_job_id else None
+                                    detail_desc = fetch_job_detail_desc(session, page, security_id, referer) if session else None
+                                    job_desc = detail_desc or job_item.get("jobDesc", "") or job_item.get("jobDetail", "") or job_name
+
+                                    salary_min, salary_max = parse_salary(salary_text)
+                                    clean_city = parse_city(city_text)
+                                    clean_education = parse_education(education)
+                                    skills = job_item.get("skills")
+                                    if isinstance(skills, list):
+                                        keywords = ",".join([str(x).strip() for x in skills if str(x).strip()])
+                                    elif isinstance(skills, str) and skills.strip():
+                                        keywords = skills.strip()
+                                    else:
+                                        keywords = extract_keywords(job_desc)
+
+                                    job_data = {
+                                        "job_name": job_name,
+                                        "company_name": company_name,
+                                        "city": clean_city,
+                                        "job_url": referer,
+                                        "salary_min": salary_min,
+                                        "salary_max": salary_max,
+                                        "experience": experience,
+                                        "education": clean_education,
+                                        "job_desc": job_desc,
+                                        "job_keywords": keywords,
+                                        "company_size": company_size,
+                                        "company_industry": company_industry,
+                                        "company_welfare": welfare,
+                                    }
+
+                                    if job_name and company_name:
+                                        if insert_job_boss(job_data):
+                                            print(f"OK {job_name} @ {company_name}")
+                                            total_inserted += 1
+                                except Exception as ex:
+                                    print(f"提取失败: {ex}")
+                                    continue
+
+                        except Exception as ex:
+                            print(f"[WARN] 发生错误: {ex}")
                             continue
-                
-                except Exception as e:
-                    print(f"⚠️ 发生错误: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    continue
-                
-                random_delay(DELAY_MIN, DELAY_MAX)
-    
-    print()
-    print("="*60)
-    print(f"爬取完成！共插入 {total_inserted} 条数据")
-    print("="*60)
-    print()
-    print("按回车键退出...")
-    input()
-    
-    page.quit()
+
+                        random_delay(DELAY_MIN, DELAY_MAX)
+
+        if platform in ("51job", "qcwy", "51", "both"):
+            print()
+            print("开始爬取 前程无忧(51job)...")
+            print()
+
+            for keyword in KEYWORDS:
+                for city in CITIES:
+                    city_code_51job = get_city_code_51job(city, config)
+                    if not city_code_51job:
+                        print(f"跳过城市(51job): {city} (缺少 city_codes_51job 映射)")
+                        continue
+
+                    print()
+                    print("=" * 60)
+                    print(f"正在爬取(51job): 关键词={keyword}, 城市={city}, code={city_code_51job}")
+                    print("=" * 60)
+
+                    cookies = ensure_51job_cookies(page, city_code_51job)
+                    if not cookies:
+                        print("获取 cookies 失败，跳过")
+                        continue
+
+                    s = requests.Session()
+                    for name, value in cookies.items():
+                        s.cookies.set(name, value, domain=".51job.com", path="/")
+
+                    s.headers.update({
+                        "User-Agent": get_user_agent_of_pc(),
+                        "Accept": "application/json, text/plain, */*",
+                        "Referer": "https://we.51job.com/pc/search",
+                        "Origin": "https://we.51job.com",
+                        "Connection": "close",
+                    })
+
+                    for page_num in range(1, PAGES_PER_CITY_51JOB + 1):
+                        try:
+                            params = build_51job_params(keyword, city_code_51job, page_num, page_size=20)
+                            resp = s.get(API_51JOB_BASE, params=params, timeout=15)
+
+                            ct = resp.headers.get("content-type", "")
+                            if "text/html" in ct or resp.text.lstrip().startswith("<"):
+                                cookies2 = ensure_51job_cookies(page, city_code_51job)
+                                if not cookies2:
+                                    print("WAF 拦截，cookie 获取失败，跳过剩余页")
+                                    break
+                                s.cookies.clear()
+                                for name, value in cookies2.items():
+                                    s.cookies.set(name, value, domain=".51job.com", path="/")
+                                resp = s.get(API_51JOB_BASE, params=params, timeout=15)
+
+                            try:
+                                data = resp.json()
+                            except Exception:
+                                print("解析响应失败，跳过剩余页")
+                                break
+
+                            items = (
+                                (data.get("resultbody") or {})
+                                .get("job", {})
+                                .get("items", [])
+                            )
+
+                            print(f"找到 {len(items)} 个岗位")
+                            if not items:
+                                break
+
+                            for item in items:
+                                try:
+                                    job_name = (item.get("jobName") or "").strip()
+                                    company_name = (item.get("companyName") or "").strip()
+                                    salary_text = (item.get("provideSalaryString") or "").strip()
+                                    experience = (item.get("workYearString") or item.get("workYear") or "").strip()
+                                    education = (item.get("degreeString") or item.get("degree") or "").strip()
+
+                                    issue_date = (item.get("issueDateString") or "").strip()
+                                    publish_date = None
+                                    if issue_date:
+                                        date_part = issue_date.split(" ")[0].strip()
+                                        try:
+                                            publish_date = datetime.strptime(date_part, "%Y-%m-%d").date()
+                                        except Exception:
+                                            publish_date = None
+
+                                    company_size = (
+                                        (item.get("companySizeString") or item.get("companySize") or "").strip()
+                                    )
+                                    company_industry = (
+                                        (item.get("industryType1Str") or item.get("industryType2Str") or item.get("companyIndustry") or "").strip()
+                                    )
+
+                                    welfare = item.get("jobWelfare") or item.get("jobWelf") or item.get("jobWelfareList")
+                                    if isinstance(welfare, list):
+                                        welfare = ",".join([str(x).strip() for x in welfare if str(x).strip()])
+                                    elif welfare is not None:
+                                        welfare = str(welfare).strip() or None
+
+                                    job_desc = item.get("jobDescribe") or item.get("jobDesc") or item.get("jobDetail")
+                                    if isinstance(job_desc, str):
+                                        job_desc = job_desc.strip() or None
+                                    else:
+                                        job_desc = None
+
+                                    job_url = (
+                                        item.get("jobHref")
+                                        or item.get("jobUrl")
+                                        or item.get("jobLink")
+                                        or item.get("jobLinkUrl")
+                                    )
+                                    if isinstance(job_url, str):
+                                        job_url = job_url.strip()
+                                        if job_url.startswith("//"):
+                                            job_url = "https:" + job_url
+                                        elif job_url.startswith("/"):
+                                            job_url = "https://jobs.51job.com" + job_url
+                                        job_url = job_url or None
+                                    else:
+                                        job_url = None
+
+                                    salary_min, salary_max = parse_salary(salary_text)
+                                    clean_education = parse_education(education)
+
+                                    job_data = {
+                                        "job_name": job_name,
+                                        "company_name": company_name,
+                                        "city": city,
+                                        "job_url": job_url,
+                                        "salary_min": salary_min,
+                                        "salary_max": salary_max,
+                                        "experience": experience,
+                                        "education": clean_education,
+                                        "job_desc": job_desc,
+                                        "job_keywords": keyword or "",
+                                        "company_size": company_size,
+                                        "company_industry": company_industry,
+                                        "company_welfare": welfare,
+                                        "publish_date": publish_date,
+                                    }
+
+                                    if job_name and company_name:
+                                        if insert_job_51job(job_data):
+                                            print(f"OK {job_name} @ {company_name}")
+                                            total_inserted += 1
+                                except Exception as ex:
+                                    print(f"提取失败: {ex}")
+                                    continue
+
+                        except Exception as ex:
+                            print(f"[WARN] 发生错误: {ex}")
+                            break
+
+                        random_delay(DELAY_MIN, DELAY_MAX)
+
+        print()
+        print("=" * 60)
+        print(f"爬取完成！共插入 {total_inserted} 条数据")
+        print("=" * 60)
+        print()
+        if sys.stdin.isatty():
+            print("按回车键退出...")
+            input()
+    finally:
+        try:
+            page.quit()
+        except Exception:
+            pass
 
 if __name__ == '__main__':
-    scrape_jobs()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--platform", choices=["boss", "51job", "both"])
+    args = parser.parse_args()
+    scrape_jobs(platform_override=args.platform)

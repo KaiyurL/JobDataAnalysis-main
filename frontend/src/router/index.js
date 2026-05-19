@@ -32,6 +32,12 @@ const routes = [
     meta: { title: '岗位分析', requiresAuth: true }
   },
   {
+    path: '/job-analysis-51job',
+    name: 'JobAnalysis51Job',
+    component: JobAnalysis,
+    meta: { title: '岗位分析(前程无忧)', requiresAuth: true, source: '51job' }
+  },
+  {
     path: '/skill-analysis',
     name: 'SkillAnalysis',
     component: SkillAnalysis,

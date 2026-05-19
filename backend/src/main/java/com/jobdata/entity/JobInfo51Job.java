@@ -11,8 +11,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("job_info")
-public class JobInfo implements Serializable {
+@TableName("job_info_51job")
+public class JobInfo51Job implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
@@ -50,5 +50,4 @@ public class JobInfo implements Serializable {
     private LocalDate publishDate;
 
     private LocalDateTime createdAt;
-
 }
