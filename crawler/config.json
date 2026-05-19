@@ -1,0 +1,8 @@
+
+{
+  "keywords": ["Java", "Python", "前端", "数据分析", "产品经理"],
+  "cities": ["北京", "上海", "广州", "深圳", "杭州"],
+  "pages_per_keyword": 2,
+  "delay_min": 3,
+  "delay_max": 8
+}

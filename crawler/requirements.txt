@@ -1,0 +1,3 @@
+DrissionPage==4.0.4.17
+pymysql==1.1.0
+jieba==0.42.1
