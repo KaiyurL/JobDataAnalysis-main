@@ -15,3 +15,9 @@ mybatis-plus:
   global-config:
     db-config:
       id-type: auto
+
+bailian:
+  apiKey: ${AI_DASHSCOPE_API_KEY}
+  baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+  model: "qwen3.5-flash"
+  timeoutMs: 60000

@@ -35,7 +35,7 @@
       </el-menu-item>
       <el-menu-item index="/job-match">
         <el-icon><User /></el-icon>
-        <span>岗位匹配</span>
+        <span>智能求职助手</span>
       </el-menu-item>
       <el-menu-item index="/company-insight">
         <el-icon><OfficeBuilding /></el-icon>

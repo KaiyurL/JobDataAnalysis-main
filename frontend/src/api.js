@@ -160,5 +160,9 @@ export default {
 
   getUserInfo() {
     return api.get('/user/info')
+  },
+
+  careerChat(data) {
+    return api.post('/ai/career-chat', data, { timeout: 60000 })
   }
 }

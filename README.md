@@ -89,6 +89,43 @@ CREATE TABLE IF NOT EXISTS user (
 
 Python 爬虫的数据库连接信息在 `crawler/spider.py` 的 `DB_CONFIG` 中配置（需要和上面的账号密码保持一致）。
 
+### 需要修改的配置（重要）
+
+1) 后端数据库配置（Spring Boot）
+- 文件：`backend/src/main/resources/application.yml`
+- 需要确认/修改：
+  - `spring.datasource.url`（数据库地址、库名 job_data）
+  - `spring.datasource.username`
+  - `spring.datasource.password`
+
+2) 爬虫数据库配置（Python）
+- 文件：`crawler/spider.py`
+- 需要确认/修改：`DB_CONFIG`（host/port/user/password/database/charset）
+
+3) 爬虫运行配置（前端「数据管理」保存到本地）
+- 文件：`crawler/config.json`（前端「数据管理」页点“保存配置”会写入这里）
+- 常用可调整项：
+  - `platform`: `boss` / `51job` / `both`
+  - `keywords` / `cities`
+  - `pages_per_keyword`（Boss 每关键词页数）
+  - `pages_per_city_51job`（前程无忧每城市页数）
+  - `city_codes_51job`（前程无忧城市编码映射）
+  - `delay_min` / `delay_max`（请求间隔，建议保守一点避免风控）
+  - `browser`: `auto` / `edge` / `chrome`（选择启动浏览器）
+
+4) AI 智能求职助手（阿里云百炼）
+- 后端会从系统环境变量读取 API Key（推荐方式）：
+  - `AI_DASHSCOPE_API_KEY`（优先）
+  - 兼容：`BAILIAN_API_KEY`
+- 可选环境变量（不设置则用默认值）：
+  - `BAILIAN_MODEL`（默认 `qwen-plus`）
+  - `BAILIAN_BASE_URL`（默认 `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`）
+  - `BAILIAN_TIMEOUT_MS`（默认 `60000`）
+
+5) 后端触发爬虫的 Python 解释器
+- 若由后端触发爬虫，建议设置环境变量：
+  - `JOBDATA_PYTHON`：指向已安装依赖的 `python.exe`（避免系统 python 缺 pip/依赖）
+
 ### 2. 后端启动
 
 ```bash

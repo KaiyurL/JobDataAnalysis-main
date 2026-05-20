@@ -103,21 +103,6 @@ public class JobInfoController {
         return Result.success(jobInfoService.predictSalary(request));
     }
 
-    @PostMapping("/match/jobs")
-    public Result<List<JobMatchResponse>> matchJobs(@RequestBody JobMatchRequest request) {
-        return Result.success(jobInfoService.matchJobs(request));
-    }
-
-    @GetMapping("/skills")
-    public Result<List<String>> getAllSkills() {
-        return Result.success(jobInfoService.getAllSkills());
-    }
-
-    @GetMapping("/skills/all")
-    public Result<List<String>> getAllSkillsSorted() {
-        return Result.success(jobInfoService.getAllSkills());
-    }
-
     @GetMapping("/stats/company-hot")
     public Result<List<CompanyHotDTO>> getCompanyHotStats() {
         return Result.success(jobInfoService.getCompanyHotStats());

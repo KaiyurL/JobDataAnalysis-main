@@ -1,157 +1,212 @@
-
 <template>
   <div class="job-match">
     <div class="page-header">
-      <h1>🎯 岗位匹配</h1>
-      <p>选择您的技能，找到最适合您的岗位</p>
+      <h1>🤖 智能求职助手</h1>
+      <p>基于阿里云百炼大模型，为你生成定制化求职建议</p>
     </div>
 
-    <el-card class="skills-card" shadow="hover">
-      <template #header>
-        <div class="card-header">
-          <span>🏷️ 选择您的技能</span>
-          <el-button type="primary" @click="handleMatch" :loading="loading" :disabled="selectedSkills.length === 0">
-            <el-icon><Odometer /></el-icon> 开始匹配
-          </el-button>
-        </div>
-      </template>
-      
-      <div class="search-area">
-        <el-input 
-          v-model="searchQuery" 
-          placeholder="搜索技能..." 
-          clearable
-          prefix-icon="Search"
-        />
-      </div>
-      
-      <div class="skills-grid">
-        <el-checkbox-group v-model="selectedSkills">
-          <el-checkbox 
-            v-for="skill in filteredSkills" 
-            :key="skill" 
-            :label="skill"
-            class="skill-checkbox"
-          />
-        </el-checkbox-group>
-      </div>
-      
-      <div class="selected-info" v-if="selectedSkills.length > 0">
-        已选择 <el-tag type="primary">{{ selectedSkills.length }}</el-tag> 个技能
-        <el-button size="small" type="danger" @click="clearSelection" style="margin-left: 10px">
-          清空选择
-        </el-button>
-      </div>
-    </el-card>
-
-    <el-card v-if="matchResults.length > 0" class="result-card" shadow="hover">
-      <template #header>
-        <span>📋 匹配结果（前 {{ matchResults.length }} 个岗位）</span>
-      </template>
-      
-      <el-table 
-        :data="matchResults" 
-        style="width: 100%"
-        stripe
-      >
-        <el-table-column prop="jobName" label="岗位名称" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="companyName" label="公司名称" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="city" label="城市" width="100" />
-        <el-table-column label="薪资" width="140">
-          <template #default="{ row }">
-            <span class="salary-tag">{{ row.salaryMin }} - {{ row.salaryMax }} K</span>
+    <el-row :gutter="16">
+      <el-col :xs="24" :sm="24" :md="9" :lg="8">
+        <el-card class="profile-card" shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span>🧾 求职画像</span>
+              <el-button size="small" @click="resetProfile">重置</el-button>
+            </div>
           </template>
-        </el-table-column>
-        <el-table-column prop="matchScore" label="匹配度" width="160">
-          <template #default="{ row }">
-            <el-progress 
-              :percentage="Math.round(row.matchScore * 100)" 
-              :color="getMatchColor(row.matchScore)"
-              :stroke-width="12"
+
+          <el-form label-position="top" :model="profile">
+            <el-form-item label="目标岗位">
+              <el-input v-model="profile.targetRole" placeholder="例如：Java后端 / 前端 / 数据分析" clearable />
+            </el-form-item>
+            <el-form-item label="城市">
+              <el-input v-model="profile.city" placeholder="例如：福州/北京/远程" clearable />
+            </el-form-item>
+            <el-form-item label="学历">
+              <el-select v-model="profile.education" placeholder="选择学历" clearable style="width: 100%">
+                <el-option label="大专" value="大专" />
+                <el-option label="本科" value="本科" />
+                <el-option label="硕士" value="硕士" />
+                <el-option label="博士" value="博士" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="经验">
+              <el-select v-model="profile.experience" placeholder="选择经验" clearable style="width: 100%">
+                <el-option label="应届生" value="应届生" />
+                <el-option label="1-3年" value="1-3年" />
+                <el-option label="3-5年" value="3-5年" />
+                <el-option label="5-10年" value="5-10年" />
+                <el-option label="10年以上" value="10年以上" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="技能（用逗号分隔）">
+              <el-input
+                v-model="profile.skills"
+                type="textarea"
+                :rows="3"
+                placeholder="例如：Java, Spring Boot, MySQL, Redis, Vue"
+              />
+            </el-form-item>
+            <el-form-item label="补充说明">
+              <el-input
+                v-model="profile.notes"
+                type="textarea"
+                :rows="4"
+                placeholder="例如：希望找实习/校招；简历项目偏少；面试薄弱点等"
+              />
+            </el-form-item>
+          </el-form>
+
+          <div class="quick-prompts">
+            <el-button size="small" @click="usePrompt('请帮我做岗位定位，并给出 30 天行动计划')">岗位定位</el-button>
+            <el-button size="small" @click="usePrompt('请帮我优化简历要点，给出可以直接写到简历上的 bullet')">简历优化</el-button>
+            <el-button size="small" @click="usePrompt('请列出面试复习清单，并给出项目讲述结构')">面试清单</el-button>
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :xs="24" :sm="24" :md="15" :lg="16">
+        <el-card class="chat-card" shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span>💬 对话</span>
+              <div class="chat-actions">
+                <el-button size="small" @click="clearChat" :disabled="sending || messages.length <= 1">清空对话</el-button>
+              </div>
+            </div>
+          </template>
+
+          <div ref="chatBodyRef" class="chat-body">
+            <div v-for="m in messages" :key="m.id" class="chat-line" :class="m.role">
+              <div class="chat-bubble">
+                <div class="chat-role">{{ m.role === 'user' ? '我' : '助手' }}</div>
+                <div class="chat-content">{{ m.content }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="chat-input">
+            <el-input
+              v-model="input"
+              type="textarea"
+              :rows="3"
+              placeholder="输入你的问题，例如：我现在是应届生，目标 Java 后端，帮我规划投递与面试准备"
+              :disabled="sending"
+              @keydown.enter.exact.prevent="handleSend"
             />
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
-
-    <el-empty v-else-if="hasMatched" description="没有找到匹配的岗位" style="margin-top: 40px" />
-    <el-empty v-else description="选择技能并点击开始匹配" style="margin-top: 40px" />
+            <div class="chat-buttons">
+              <el-button type="primary" @click="handleSend" :loading="sending" :disabled="!input.trim()">
+                发送
+              </el-button>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { Odometer } from '@element-plus/icons-vue'
+import { ref, nextTick } from 'vue'
 import api from '../api.js'
 import { ElMessage } from 'element-plus'
 
-const loading = ref(false)
-const allSkills = ref([])
-const selectedSkills = ref([])
-const matchResults = ref([])
-const hasMatched = ref(false)
-const searchQuery = ref('')
-
-const filteredSkills = computed(() => {
-  if (!searchQuery.value) {
-    return allSkills.value
-  }
-  const q = searchQuery.value.toLowerCase()
-  return allSkills.value.filter(skill => 
-    skill.toLowerCase().includes(q)
-  )
+const profile = ref({
+  targetRole: '',
+  city: '',
+  education: '',
+  experience: '',
+  skills: '',
+  notes: ''
 })
 
-const loadSkills = async () => {
-  try {
-    const res = await api.getAllSkillsSorted()
-    if (res.data.code === 200) {
-      allSkills.value = res.data.data
-    }
-  } catch (e) {
-    console.error('加载技能失败', e)
+const messages = ref([
+  {
+    id: `m_${Date.now()}`,
+    role: 'assistant',
+    content: '把你的目标岗位、城市、学历、经验、技能补充一下，然后告诉我你最想解决的问题。我会给你一份可执行的求职建议。'
+  }
+])
+
+const input = ref('')
+const sending = ref(false)
+const chatBodyRef = ref(null)
+
+const scrollToBottom = async () => {
+  await nextTick()
+  const el = chatBodyRef.value
+  if (!el) return
+  el.scrollTop = el.scrollHeight
+}
+
+const resetProfile = () => {
+  profile.value = {
+    targetRole: '',
+    city: '',
+    education: '',
+    experience: '',
+    skills: '',
+    notes: ''
   }
 }
 
-const handleMatch = async () => {
-  if (selectedSkills.value.length === 0) {
-    ElMessage.warning('请至少选择一个技能')
-    return
-  }
-
-  loading.value = true
-  try {
-    const res = await api.matchJobs({ skills: selectedSkills.value })
-    if (res.data.code === 200) {
-      matchResults.value = res.data.data
-      hasMatched.value = true
-      if (matchResults.value.length === 0) {
-        ElMessage.warning('没有找到匹配的岗位')
-      } else {
-        ElMessage.success(`找到 ${matchResults.value.length} 个匹配岗位`)
-      }
+const clearChat = () => {
+  messages.value = [
+    {
+      id: `m_${Date.now()}`,
+      role: 'assistant',
+      content: '已清空对话。你可以重新描述你的目标与当前情况，我会继续给出建议。'
     }
+  ]
+  input.value = ''
+  scrollToBottom()
+}
+
+const usePrompt = (text) => {
+  input.value = text
+}
+
+const buildHistoryPayload = () => {
+  const maxHistory = 12
+  const tail = messages.value.slice(Math.max(0, messages.value.length - maxHistory))
+  return tail
+    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .map(m => ({ role: m.role, content: m.content }))
+}
+
+const handleSend = async () => {
+  const content = input.value.trim()
+  if (!content) return
+
+  const userMsg = { id: `u_${Date.now()}`, role: 'user', content }
+  messages.value.push(userMsg)
+  input.value = ''
+  await scrollToBottom()
+
+  sending.value = true
+  try {
+    const res = await api.careerChat({
+      profile: { ...profile.value },
+      message: content,
+      history: buildHistoryPayload()
+    })
+    if (res.data.code !== 200) {
+      throw new Error(res.data.message || '请求失败')
+    }
+    const reply = res.data.data?.reply || ''
+    messages.value.push({ id: `a_${Date.now()}`, role: 'assistant', content: reply || '未返回内容' })
+    await scrollToBottom()
   } catch (e) {
-    console.error('匹配失败', e)
-    ElMessage.error('匹配失败，请稍后重试')
+    console.error(e)
+    const backendMessage = e?.response?.data?.message
+    const errorMessage = backendMessage || e?.message || 'AI 生成失败，请检查后端和百炼配置'
+    ElMessage.error(String(errorMessage))
+    messages.value.push({ id: `a_${Date.now()}`, role: 'assistant', content: '当前无法生成建议，请稍后重试。' })
+    await scrollToBottom()
   } finally {
-    loading.value = false
+    sending.value = false
   }
 }
-
-const clearSelection = () => {
-  selectedSkills.value = []
-}
-
-const getMatchColor = (score) => {
-  if (score >= 0.8) return '#67C23A'
-  if (score >= 0.6) return '#E6A23C'
-  return '#F56C6C'
-}
-
-onMounted(() => {
-  loadSkills()
-})
 </script>
 
 <style scoped>
@@ -176,44 +231,79 @@ onMounted(() => {
   font-size: 14px;
 }
 
-.skills-card,
-.result-card {
-  border-radius: 8px;
-  margin-bottom: 20px;
-}
-
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.search-area {
-  margin-bottom: 20px;
+.profile-card,
+.chat-card {
+  border-radius: 8px;
 }
 
-.skills-grid {
+.quick-prompts {
   display: flex;
   flex-wrap: wrap;
-  gap: 15px;
-  padding: 10px 0;
-  max-height: 400px;
+  gap: 8px;
+}
+
+.chat-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-body {
+  height: 520px;
   overflow-y: auto;
+  padding: 6px 4px;
 }
 
-.skill-checkbox {
-  margin-right: 0;
+.chat-line {
+  display: flex;
+  margin: 10px 0;
 }
 
-.selected-info {
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #EBEEF5;
-  color: #666;
+.chat-line.user {
+  justify-content: flex-end;
 }
 
-.salary-tag {
-  color: #F56C6C;
-  font-weight: bold;
+.chat-line.assistant {
+  justify-content: flex-start;
+}
+
+.chat-bubble {
+  max-width: 92%;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #f5f7fa;
+}
+
+.chat-line.user .chat-bubble {
+  background: #ecf5ff;
+}
+
+.chat-role {
+  font-size: 12px;
+  color: #606266;
+  margin-bottom: 6px;
+}
+
+.chat-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #303133;
+  line-height: 1.6;
+}
+
+.chat-input {
+  border-top: 1px solid #ebeef5;
+  padding-top: 12px;
+}
+
+.chat-buttons {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
 }
 </style>

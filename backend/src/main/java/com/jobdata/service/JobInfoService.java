@@ -25,10 +25,6 @@ public interface JobInfoService extends IService<JobInfo> {
 
     SalaryPredictResponse predictSalary(SalaryPredictRequest request);
 
-    List<JobMatchResponse> matchJobs(JobMatchRequest request);
-
-    List<String> getAllSkills();
-
     List<CompanyHotDTO> getCompanyHotStats();
 
     List<CompanySalaryDTO> getCompanySalaryStats();

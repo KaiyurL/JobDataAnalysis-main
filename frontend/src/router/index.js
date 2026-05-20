@@ -53,7 +53,7 @@ const routes = [
     path: '/job-match',
     name: 'JobMatch',
     component: JobMatch,
-    meta: { title: '岗位匹配', requiresAuth: true }
+    meta: { title: '智能求职助手', requiresAuth: true }
   },
   {
     path: '/company-insight',
