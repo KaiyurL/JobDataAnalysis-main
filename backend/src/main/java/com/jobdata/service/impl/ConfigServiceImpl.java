@@ -45,6 +45,7 @@ public class ConfigServiceImpl implements ConfigService {
                 // 返回默认配置
                 Map<String, Object> defaultConfig = new HashMap<>();
                 defaultConfig.put("platform", "boss");
+                defaultConfig.put("browser", "auto");
                 defaultConfig.put("keywords", new String[]{"Java", "Python", "前端", "数据分析", "产品经理"});
                 defaultConfig.put("cities", new String[]{"北京", "上海", "广州", "深圳", "杭州"});
                 defaultConfig.put("pages_per_keyword", 2);
@@ -79,6 +80,7 @@ public class ConfigServiceImpl implements ConfigService {
             Map<String, Object> config = objectMapper.readValue(file, Map.class);
 
             config.putIfAbsent("platform", "boss");
+            config.putIfAbsent("browser", "auto");
             config.putIfAbsent("pages_per_city_51job", 2);
 
             Object codesObj = config.get("city_codes_51job");

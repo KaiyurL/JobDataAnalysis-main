@@ -67,6 +67,11 @@ dist-ssr/
 *.db
 *.sqlite
 
+# Data/Models (ignored)
+data/
+models/
+notebooks/.ipynb_checkpoints/
+
 # Security
 application-dev.yml
 application-local.yml

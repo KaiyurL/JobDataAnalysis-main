@@ -1,9 +1,9 @@
 {
   "platform" : "boss",
-  "keywords" : [ "全栈" ],
-  "cities" : [ "北京" ],
+  "keywords" : [ "数据分析", "ai", "python", "java", "c++", "Linux", "小程序", "嵌入式", "go", "深度学习", ".net", "C#", "游戏开发", "vue" ],
+  "cities" : [ "北京", "上海", "厦门", "福州" ],
   "pages_per_keyword" : 2,
-  "pages_per_city_51job" : 2,
+  "pages_per_city_51job" : 10,
   "delay_min" : 3,
   "delay_max" : 8,
   "city_codes_51job" : {
@@ -28,5 +28,6 @@
     "无锡" : "070400",
     "合肥" : "150200",
     "福州" : "110300"
-  }
+  },
+  "browser" : "edge"
 }

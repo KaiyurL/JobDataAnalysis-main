@@ -70,6 +70,15 @@
               <div class="form-tip">选择要爬取的数据平台</div>
             </el-form-item>
 
+            <el-form-item label="浏览器">
+              <el-select v-model="config.browser" style="width: 100%;">
+                <el-option label="自动" value="auto" />
+                <el-option label="Edge" value="edge" />
+                <el-option label="Chrome" value="chrome" />
+              </el-select>
+              <div class="form-tip">用于启动 DrissionPage 浏览器（若遇风控，可尝试切换）</div>
+            </el-form-item>
+
             <el-form-item label="岗位关键词">
               <div class="keywords-input">
                 <el-tag
@@ -314,6 +323,7 @@ const newCityCodeValue = ref('')
 // 配置相关
 const config = ref({
   platform: 'boss',
+  browser: 'auto',
   keywords: [],
   cities: [],
   pages_per_keyword: 2,
@@ -408,6 +418,7 @@ const loadConfig = async () => {
     if (res.data.code === 200) {
       const incoming = { ...res.data.data }
       incoming.platform = incoming.platform || 'boss'
+      incoming.browser = incoming.browser || 'auto'
       incoming.pages_per_city_51job = incoming.pages_per_city_51job || 2
       const codes = incoming.city_codes_51job || {}
       incoming.city_codes_51job = Object.keys(codes).length > 0 ? codes : { ...defaultCityCodes51Job }
@@ -426,6 +437,7 @@ const saveConfig = async () => {
     if (res.data.code === 200) {
       const incoming = { ...res.data.data }
       incoming.platform = incoming.platform || 'boss'
+      incoming.browser = incoming.browser || 'auto'
       incoming.pages_per_city_51job = incoming.pages_per_city_51job || 2
       const codes = incoming.city_codes_51job || {}
       incoming.city_codes_51job = Object.keys(codes).length > 0 ? codes : { ...defaultCityCodes51Job }
@@ -446,6 +458,7 @@ const saveConfig = async () => {
 const resetConfig = () => {
   config.value = {
     platform: 'boss',
+    browser: 'auto',
     keywords: ['Java', 'Python', '前端', '数据分析', '产品经理'],
     cities: ['北京', '上海', '广州', '深圳', '杭州'],
     pages_per_keyword: 2,
