@@ -232,7 +232,7 @@ public class DataManageServiceImpl implements DataManageService {
         addCrawlerLog("Python: " + python);
         ensureCrawlerDependencies(crawlerDir, python);
 
-        ProcessBuilder pb = new ProcessBuilder(python, spiderPath.toString());
+        ProcessBuilder pb = new ProcessBuilder(python, "-u", spiderPath.toString());
         pb.directory(crawlerDir.toFile());
         pb.redirectErrorStream(true);
 
@@ -245,7 +245,10 @@ public class DataManageServiceImpl implements DataManageService {
         String line;
         while ((line = reader.readLine()) != null) {
             addCrawlerLog(line);
-            if (line.contains("按回车") || line.contains("回车键继续")) {
+            if (line.contains("按回车")
+                    || line.contains("回车键继续")
+                    || line.contains("请先手动登录")
+                    || line.contains("请先登录")) {
                 waitingForLogin = true;
                 lastMessage = "等待登录/验证完成，点击“我已登录，继续爬取”";
             }
@@ -280,6 +283,7 @@ public class DataManageServiceImpl implements DataManageService {
                 currentStdin.flush();
                 waitingForLogin = false;
                 lastMessage = "已发送继续信号，爬虫将开始抓取...";
+                addCrawlerLog("[UI] 已发送继续信号");
                 result.put("success", true);
                 result.put("message", "已发送继续信号");
                 return result;

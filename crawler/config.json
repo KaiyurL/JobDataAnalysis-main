@@ -1,7 +1,7 @@
 {
-  "platform" : "51job",
-  "keywords" : [ "Java", "python" ],
-  "cities" : [ "福州" ],
+  "platform" : "boss",
+  "keywords" : [ "全栈" ],
+  "cities" : [ "北京" ],
   "pages_per_keyword" : 2,
   "pages_per_city_51job" : 2,
   "delay_min" : 3,

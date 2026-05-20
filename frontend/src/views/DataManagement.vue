@@ -359,6 +359,7 @@ const defaultCityCodes51Job = {
 
 let pollTimer = null
 let disabledTimer = null
+let currentPollInterval = 5000
 
 const statusMap = {
   'idle': { type: 'success', text: '空闲' },
@@ -582,11 +583,21 @@ const startUpdate = async () => {
 onMounted(() => {
   loadData()
   loadConfig()
-  
-  pollTimer = setInterval(() => {
-    loadData()
-  }, 3000)
 })
+
+watch(
+  () => overview.value?.status,
+  (status) => {
+    const nextInterval = status === 'running' ? 2000 : 8000
+    if (nextInterval === currentPollInterval && pollTimer) return
+    currentPollInterval = nextInterval
+    if (pollTimer) clearInterval(pollTimer)
+    pollTimer = setInterval(() => {
+      loadData()
+    }, currentPollInterval)
+  },
+  { immediate: true }
+)
 
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
