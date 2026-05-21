@@ -26,9 +26,9 @@ public class PipelineController {
     private PipelineService pipelineService;
 
     @PostMapping("/dashboard/run")
-    public Result<?> runDashboard() {
+    public Result<?> runDashboard(@RequestParam(value = "force", required = false, defaultValue = "false") boolean force) {
         try {
-            return Result.success(pipelineService.startDashboardPipeline());
+            return Result.success(pipelineService.startDashboardPipeline(force));
         } catch (Exception e) {
             return Result.error("启动 Pipeline 失败: " + e.getMessage());
         }
@@ -87,4 +87,3 @@ public class PipelineController {
         return MediaType.APPLICATION_OCTET_STREAM;
     }
 }
-

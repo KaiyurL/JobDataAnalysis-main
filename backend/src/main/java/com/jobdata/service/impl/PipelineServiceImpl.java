@@ -1,7 +1,10 @@
 package com.jobdata.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jobdata.mapper.JobInfo51JobMapper;
+import com.jobdata.mapper.JobInfoMapper;
 import com.jobdata.service.PipelineService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -40,12 +43,26 @@ public class PipelineServiceImpl implements PipelineService {
     private volatile Map<String, String> lastArtifacts = new LinkedHashMap<>();
     private volatile Map<String, Object> lastSummary = new LinkedHashMap<>();
     private volatile List<String> lastErrors = new ArrayList<>();
+    private volatile Map<String, Object> lastFingerprint = new LinkedHashMap<>();
+    private volatile Boolean lastCached = false;
 
     private final Deque<Map<String, String>> logs = new ArrayDeque<>();
     private final Object lock = new Object();
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    @Autowired
+    private JobInfoMapper jobInfoMapper;
+
+    @Autowired
+    private JobInfo51JobMapper jobInfo51JobMapper;
 
     @Override
     public Map<String, Object> startDashboardPipeline() {
+        return startDashboardPipeline(false);
+    }
+
+    @Override
+    public Map<String, Object> startDashboardPipeline(boolean force) {
         Map<String, Object> result = new HashMap<>();
         synchronized (lock) {
             if ("running".equals(status)) {
@@ -53,24 +70,66 @@ public class PipelineServiceImpl implements PipelineService {
                 result.put("message", "Pipeline 正在运行中");
                 return result;
             }
+
+            Map<String, Object> fingerprint = safeGetFingerprint();
+            CachePayload cache = loadCacheIfPresent();
+            if (!force && fingerprint != null && cache != null && cache.fingerprint != null
+                    && mapper.valueToTree(cache.fingerprint).equals(mapper.valueToTree(fingerprint))
+                    && cache.runDir != null && cache.artifacts != null
+                    && artifactsLookUsable(cache.runDir, cache.artifacts)) {
+                status = "idle";
+                lastStartTime = LocalDateTime.now();
+                lastEndTime = LocalDateTime.now();
+                lastExitCode = 0;
+                lastMessage = "已使用缓存结果（数据未变化）";
+                lastRunDir = cache.runDir;
+                lastArtifacts = new LinkedHashMap<>(cache.artifacts);
+                lastErrors = cache.errors == null ? new ArrayList<>() : new ArrayList<>(cache.errors);
+                lastSummary = buildSummary(lastArtifacts, lastErrors);
+                lastFingerprint = new LinkedHashMap<>(fingerprint);
+                lastCached = true;
+                synchronized (logs) {
+                    logs.clear();
+                    addLog("[Cache] 命中缓存，跳过聚类/训练");
+                }
+                result.put("success", true);
+                result.put("cached", true);
+                result.put("message", lastMessage);
+                result.put("status", status);
+                result.put("runDir", lastRunDir);
+                return result;
+            }
+
             status = "running";
             lastStartTime = LocalDateTime.now();
             lastEndTime = null;
             lastExitCode = null;
-            lastMessage = "Pipeline 已启动";
+            lastMessage = force ? "Pipeline 已启动（强制重算）" : "Pipeline 已启动";
             lastRunDir = null;
             lastArtifacts = new LinkedHashMap<>();
             lastSummary = new LinkedHashMap<>();
             lastErrors = new ArrayList<>();
+            lastFingerprint = fingerprint == null ? new LinkedHashMap<>() : new LinkedHashMap<>(fingerprint);
+            lastCached = false;
             synchronized (logs) {
                 logs.clear();
             }
 
+            final Map<String, Object> fingerprintForSave = fingerprint;
             new Thread(() -> {
                 try {
                     runDashboard();
                     status = "idle";
                     lastMessage = "Pipeline 运行完成";
+                    if (fingerprintForSave != null && lastRunDir != null && lastArtifacts != null) {
+                        saveCache(new CachePayload(
+                                lastRunDir,
+                                new LinkedHashMap<>(lastArtifacts),
+                                new ArrayList<>(lastErrors),
+                                new LinkedHashMap<>(fingerprintForSave),
+                                LocalDateTime.now().toString()
+                        ));
+                    }
                 } catch (Exception e) {
                     status = "failed";
                     lastMessage = "Pipeline 运行失败: " + e.getMessage();
@@ -84,6 +143,7 @@ public class PipelineServiceImpl implements PipelineService {
             result.put("success", true);
             result.put("message", "Pipeline 已启动");
             result.put("status", status);
+            result.put("cached", false);
             return result;
         }
     }
@@ -110,6 +170,8 @@ public class PipelineServiceImpl implements PipelineService {
         result.put("artifacts", lastArtifacts);
         result.put("summary", lastSummary);
         result.put("errors", lastErrors);
+        result.put("fingerprint", lastFingerprint);
+        result.put("cached", lastCached);
         return result;
     }
 
@@ -202,7 +264,6 @@ public class PipelineServiceImpl implements PipelineService {
             throw new RuntimeException("Pipeline 未输出结果 JSON");
         }
 
-        ObjectMapper mapper = new ObjectMapper();
         @SuppressWarnings("unchecked")
         Map<String, Object> payload = mapper.readValue(pipelineJsonLine, Map.class);
 
@@ -226,6 +287,140 @@ public class PipelineServiceImpl implements PipelineService {
         lastArtifacts = artifacts;
         lastErrors = readErrors(payload);
         lastSummary = buildSummary(artifacts, lastErrors);
+    }
+
+    private Map<String, Object> safeGetFingerprint() {
+        try {
+            Map<String, Object> fp = new LinkedHashMap<>();
+            Map<String, Object> boss = jobInfoMapper.getFingerprint();
+            Map<String, Object> job51 = jobInfo51JobMapper.getFingerprint();
+            fp.put("job_info", normalizeFpRow(boss));
+            fp.put("job_info_51job", normalizeFpRow(job51));
+            return fp;
+        } catch (Exception e) {
+            addLog("[Fingerprint] 获取失败: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private Map<String, Object> normalizeFpRow(Map<String, Object> row) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (row == null) {
+            out.put("cnt", 0);
+            out.put("maxCreatedAt", null);
+            return out;
+        }
+        Object cnt = row.get("cnt");
+        Object max = row.get("maxCreatedAt");
+        out.put("cnt", cnt == null ? 0 : Long.parseLong(String.valueOf(cnt)));
+        out.put("maxCreatedAt", max == null ? null : String.valueOf(max));
+        return out;
+    }
+
+    private boolean artifactsLookUsable(String runDir, Map<String, String> artifacts) {
+        try {
+            if (runDir == null || runDir.trim().isEmpty()) {
+                return false;
+            }
+            Path base = Paths.get(runDir).toAbsolutePath().normalize();
+            if (!base.toFile().exists()) {
+                return false;
+            }
+            String[] must = new String[]{"jobs_clean_csv", "jobs_reduced_csv"};
+            for (String k : must) {
+                String p = artifacts.get(k);
+                if (p == null || p.trim().isEmpty()) {
+                    return false;
+                }
+                Path fp = Paths.get(p).toAbsolutePath().normalize();
+                if (!fp.startsWith(base) || !fp.toFile().exists()) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private Path resolveCacheFile() {
+        Path crawlerDir = resolveCrawlerDir();
+        Path outDir = crawlerDir.resolve("output");
+        return outDir.resolve("pipeline_cache.json").toAbsolutePath().normalize();
+    }
+
+    private CachePayload loadCacheIfPresent() {
+        try {
+            Path p = resolveCacheFile();
+            if (!p.toFile().exists()) {
+                return null;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> m = mapper.readValue(p.toFile(), Map.class);
+            String runDir = m.get("runDir") == null ? null : String.valueOf(m.get("runDir"));
+            Map<String, String> artifacts = new LinkedHashMap<>();
+            Object a = m.get("artifacts");
+            if (a instanceof Map) {
+                Map<?, ?> mm = (Map<?, ?>) a;
+                for (Map.Entry<?, ?> e : mm.entrySet()) {
+                    if (e.getKey() != null && e.getValue() != null) {
+                        artifacts.put(String.valueOf(e.getKey()), String.valueOf(e.getValue()));
+                    }
+                }
+            }
+            List<String> errors = new ArrayList<>();
+            Object err = m.get("errors");
+            if (err instanceof List) {
+                for (Object x : (List<?>) err) {
+                    if (x != null && !String.valueOf(x).trim().isEmpty()) {
+                        errors.add(String.valueOf(x));
+                    }
+                }
+            }
+            Object fp = m.get("fingerprint");
+            Map<String, Object> fingerprint = fp instanceof Map ? (Map<String, Object>) fp : null;
+            String updatedAt = m.get("updatedAt") == null ? null : String.valueOf(m.get("updatedAt"));
+            if (runDir == null || artifacts.isEmpty() || fingerprint == null) {
+                return null;
+            }
+            return new CachePayload(runDir, artifacts, errors, fingerprint, updatedAt);
+        } catch (Exception e) {
+            addLog("[Cache] 读取失败: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private void saveCache(CachePayload payload) {
+        try {
+            Path p = resolveCacheFile();
+            Files.createDirectories(p.getParent());
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("runDir", payload.runDir);
+            m.put("artifacts", payload.artifacts);
+            m.put("errors", payload.errors);
+            m.put("fingerprint", payload.fingerprint);
+            m.put("updatedAt", payload.updatedAt);
+            mapper.writerWithDefaultPrettyPrinter().writeValue(p.toFile(), m);
+            addLog("[Cache] 已写入缓存: " + p);
+        } catch (Exception e) {
+            addLog("[Cache] 写入失败: " + e.getMessage());
+        }
+    }
+
+    private static class CachePayload {
+        final String runDir;
+        final Map<String, String> artifacts;
+        final List<String> errors;
+        final Map<String, Object> fingerprint;
+        final String updatedAt;
+
+        CachePayload(String runDir, Map<String, String> artifacts, List<String> errors, Map<String, Object> fingerprint, String updatedAt) {
+            this.runDir = runDir;
+            this.artifacts = artifacts;
+            this.errors = errors;
+            this.fingerprint = fingerprint;
+            this.updatedAt = updatedAt;
+        }
     }
 
     private List<String> readErrors(Map<String, Object> payload) {

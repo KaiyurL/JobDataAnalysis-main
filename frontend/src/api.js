@@ -170,6 +170,10 @@ export default {
     return api.post('/pipeline/dashboard/run', {}, { timeout: 60000 })
   },
 
+  runDashboardPipelineForce() {
+    return api.post('/pipeline/dashboard/run', {}, { params: { force: true }, timeout: 60000 })
+  },
+
   getPipelineStatus() {
     return api.get('/pipeline/status', { timeout: 60000 })
   },

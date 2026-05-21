@@ -43,7 +43,7 @@
                 <span class="icon-dot blue"></span>
                 <span class="title-text">NLP 语义聚类地图</span>
               </div>
-              <el-button type="primary" size="small" round @click="startPipeline" :loading="pipelineRunning">
+              <el-button type="primary" size="small" round @click="startPipeline(true)" :loading="pipelineRunning">
                 重新扫描数据
               </el-button>
             </div>
@@ -495,15 +495,25 @@ const loadPipelineArtifacts = async () => {
       pipelineImageUrls.value.cluster = url
     }
   }
+  return Boolean(data?.runDir) && Boolean(data?.artifacts) && Object.keys(data.artifacts || {}).length > 0
 }
 
-const startPipeline = async () => {
+const startPipeline = async (force = false) => {
   pipelineRunning.value = true
   pipelineProgress.value = 10
   pipelineStatus.value = 'running'
   revokePipelineUrls()
   try {
-    await api.runDashboardPipeline()
+    const runRes = force ? await api.runDashboardPipelineForce() : await api.runDashboardPipeline()
+    const cached = runRes?.data?.data?.cached === true
+    if (!force && cached) {
+      pipelineRunning.value = false
+      pipelineProgress.value = 100
+      pipelineStatus.value = 'idle'
+      pipelineMessage.value = runRes?.data?.data?.message || '已使用缓存结果'
+      await loadPipelineArtifacts()
+      return
+    }
     pipelinePollTimer.value = setInterval(async () => {
       const res = await api.getPipelineStatus()
       const s = res.data.data
@@ -535,7 +545,16 @@ const handleExportDashboard = () => exportToPDFMultiPage('dashboard-content', '�
 onMounted(() => {
   initCharts()
   loadAllData()
-  startPipeline()
+  loadPipelineArtifacts().then((has) => {
+    if (has) {
+      pipelineStatus.value = 'idle'
+      pipelineMessage.value = '已加载上次分析结果'
+      pipelineProgress.value = 100
+      pipelineRunning.value = false
+      return
+    }
+    startPipeline(false)
+  })
   window.addEventListener('resize', handleResize)
 })
 
