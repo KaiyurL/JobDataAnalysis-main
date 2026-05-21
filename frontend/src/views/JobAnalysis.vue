@@ -1,131 +1,135 @@
 <template>
-  <div class="job-analysis" id="job-analysis-content">
-    <div class="page-header">
-      <div class="header-left">
-        <h1>💼 岗位分析{{ is51Job ? ' (前程无忧)' : ' (BOSS直聘)' }}</h1>
-        <p>详细展示所有招聘岗位信息，支持筛选、搜索和导出</p>
+  <div class="job-list-view" id="job-analysis-content">
+    <!-- 页面内容 -->
+    <div class="analysis-content">
+      <div class="page-header">
+        <div class="header-left">
+          <h1>💼 岗位分析</h1>
+          <p>多维筛选、实时搜索，深度洞察 {{ currentSourceText }} 招聘市场</p>
+        </div>
+        <div class="header-actions">
+          <el-button type="primary" plain @click="handleExportPDF" :loading="exportingPdf">
+            <el-icon><Document /></el-icon> 导出PDF
+          </el-button>
+          <el-button type="primary" @click="handleExport" :loading="exporting">
+            <el-icon><Download /></el-icon> 导出CSV
+          </el-button>
+        </div>
       </div>
-      <el-button type="primary" @click="handleExportPDF" :loading="exportingPdf">
-        <el-icon><Document /></el-icon> 导出PDF
-      </el-button>
+
+      <div class="main-grid">
+        <!-- 筛选栏 -->
+        <el-card class="filter-card" shadow="never">
+          <el-form :model="filters" label-position="top">
+            <el-form-item label="岗位关键词">
+              <el-input v-model="filters.keyword" placeholder="Java, Python, 前端..." prefix-icon="Search" clearable />
+            </el-form-item>
+            <el-form-item label="目标城市">
+              <el-select v-model="filters.selectedCities" multiple placeholder="选择城市" collapse-tags collapse-tags-tooltip>
+                <el-option v-for="city in cityOptions" :key="city" :label="city" :value="city" />
+              </el-select>
+            </el-form-item>
+            <el-row :gutter="12">
+              <el-col :span="12">
+                <el-form-item label="学历要求">
+                  <el-select v-model="filters.education" placeholder="不限" clearable>
+                    <el-option v-for="edu in educationOptions" :key="edu" :label="edu" :value="edu" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="经验要求">
+                  <el-select v-model="filters.experience" placeholder="不限" clearable>
+                    <el-option v-for="exp in experienceOptions" :key="exp" :label="exp" :value="exp" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <div class="filter-actions">
+              <el-button type="primary" class="search-btn" @click="handleSearch" :loading="loading">立即查询</el-button>
+              <el-button class="reset-btn" @click="handleReset">重置</el-button>
+            </div>
+          </el-form>
+        </el-card>
+
+        <!-- 数据表格 -->
+        <el-card class="table-card" shadow="never">
+          <div class="table-header">
+            <div class="table-title">
+              <span>📋 岗位列表</span>
+              <el-tag size="small" effect="plain" round>{{ total }} 条结果</el-tag>
+            </div>
+            <el-input v-model="tableSearch" placeholder="在当前结果中搜索公司或岗位..." style="width: 280px" prefix-icon="Search" clearable />
+          </div>
+          
+          <el-table 
+            v-loading="loading"
+            :data="filteredJobs" 
+            style="width: 100%" 
+            :default-sort="{ prop: 'salaryAvg', order: 'descending' }"
+            class="custom-table"
+          >
+            <el-table-column label="职位信息" min-width="240">
+              <template #default="{ row }">
+                <div class="job-info-cell">
+                  <div class="job-name">{{ row.jobName }}</div>
+                  <div class="company-name">{{ row.companyName }}</div>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="city" label="城市" width="100">
+               <template #default="{ row }">
+                <div class="city-tag"><el-icon><Location /></el-icon> {{ row.city }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="salaryAvg" label="薪资标准" width="160" sortable>
+              <template #default="{ row }">
+                <span class="salary-range">{{ row.salaryMin }}K - {{ row.salaryMax }}K</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="基本要求" width="180">
+              <template #default="{ row }">
+                <div class="tags-cell">
+                  <el-tag size="small" type="info" v-if="row.education">{{ row.education }}</el-tag>
+                  <el-tag size="small" type="success" v-if="row.experience">{{ row.experience }}</el-tag>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="详情" width="100" fixed="right">
+              <template #default="{ row }">
+                <el-button type="primary" link @click="openDesc(row)">查看详情</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          
+          <div class="pagination-container">
+            <el-pagination
+              v-model:current-page="currentPage"
+              v-model:page-size="pageSize"
+              :page-sizes="[10, 20, 50]"
+              :total="total"
+              layout="total, sizes, prev, pager, next"
+              @size-change="handleSizeChange"
+              @current-change="handleCurrentChange"
+            />
+          </div>
+        </el-card>
+      </div>
     </div>
 
-    <el-card class="filter-card" shadow="hover">
-      <el-form :inline="true" :model="filters" class="filter-form">
-        <el-form-item label="岗位关键词">
-          <el-input v-model="filters.keyword" placeholder="请输入岗位或公司关键词" clearable />
-        </el-form-item>
-        <el-form-item label="城市">
-          <el-select v-model="filters.selectedCities" multiple placeholder="请选择城市" collapse-tags collapse-tags-tooltip style="width: 250px">
-            <el-option v-for="city in cityOptions" :key="city" :label="city" :value="city" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="学历">
-          <el-select v-model="filters.education" placeholder="请选择学历" clearable style="width: 150px">
-            <el-option label="不限" value="" />
-            <el-option v-for="edu in educationOptions" :key="edu" :label="edu" :value="edu" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="经验">
-          <el-select v-model="filters.experience" placeholder="请选择经验" clearable style="width: 150px">
-            <el-option label="不限" value="" />
-            <el-option v-for="exp in experienceOptions" :key="exp" :label="exp" :value="exp" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="handleSearch" :loading="loading">
-            <el-icon><Search /></el-icon> 查询
-          </el-button>
-          <el-button @click="handleReset">
-            <el-icon><RefreshLeft /></el-icon> 重置
-          </el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
-
-    <el-card class="table-card" shadow="hover">
-      <template #header>
-        <div class="card-header">
-          <span>📋 岗位列表 (共 {{ total }} 条)</span>
-          <div class="table-tools">
-            <el-input v-model="tableSearch" placeholder="搜索岗位/公司" prefix-icon="Search" style="width: 250px" clearable />
-            <el-button type="primary" @click="handleExport" :loading="exporting" style="margin-left: 10px">
-              <el-icon><Download /></el-icon> 导出 CSV
-            </el-button>
-          </div>
+    <el-dialog v-model="descDialogVisible" :title="descDialogTitle" width="720px" custom-class="job-detail-dialog">
+      <div class="dialog-inner">
+        <div class="dialog-section">
+          <h3>职位描述</h3>
+          <p class="desc-text">{{ descDialogContent }}</p>
         </div>
-      </template>
-      
-      <el-table 
-        v-loading="loading"
-        :data="filteredJobs" 
-        style="width: 100%" 
-        :default-sort="{ prop: 'salaryAvg', order: 'descending' }"
-        stripe
-        border
-      >
-        <el-table-column prop="jobName" label="岗位名称" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="companyName" label="公司名称" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="city" label="城市" width="100" />
-        <el-table-column 
-          prop="salaryAvg" 
-          label="薪资" 
-          width="150" 
-          sortable
-          :sort-method="(a, b) => a.salaryAvg - b.salaryAvg"
-        >
-          <template #default="{ row }">
-            <span class="salary-tag">{{ row.salaryMin }}K - {{ row.salaryMax }}K</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="education" label="学历" width="100">
-          <template #default="{ row }">
-            <el-tag v-if="row.education" size="small" type="info">{{ row.education }}</el-tag>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="experience" label="经验" width="120">
-          <template #default="{ row }">
-            <el-tag v-if="row.experience" size="small" type="success">{{ row.experience }}</el-tag>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="companyIndustry" label="行业" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="companySize" label="公司规模" width="120" />
-        <el-table-column prop="jobDesc" label="工作介绍" min-width="320">
-          <template #default="{ row }">
-            <span v-if="row.jobDesc" class="desc-preview" :title="row.jobDesc">{{ formatDescPreview(row.jobDesc) }}</span>
-            <el-button v-if="row.jobDesc && row.jobDesc.length > 60" link type="primary" @click="openDesc(row)">查看</el-button>
-            <span v-else-if="!row.jobDesc">-</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="companyWelfare" label="公司福利" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="jobUrl" label="招聘路径" min-width="280">
-          <template #default="{ row }">
-            <span v-if="row.jobUrl" class="url-cell">
-              <span class="url-preview" :title="normalizeJobUrl(row.jobUrl)">{{ formatUrlPreview(row.jobUrl) }}</span>
-              <el-link :href="normalizeJobUrl(row.jobUrl)" target="_blank" rel="noopener noreferrer" type="primary">打开</el-link>
-              <el-button link type="primary" @click="copyUrl(row.jobUrl)">复制</el-button>
-            </span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-      </el-table>
-      
-      <el-pagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="total"
-        layout="total, sizes, prev, pager, next, jumper"
-        @size-change="handleSizeChange"
-        @current-change="handleCurrentChange"
-        style="margin-top: 20px; justify-content: flex-end"
-      />
-    </el-card>
-
-    <el-dialog v-model="descDialogVisible" :title="descDialogTitle" width="720px">
-      <div class="desc-dialog-content">{{ descDialogContent }}</div>
+        <div class="dialog-footer-actions">
+          <el-button type="primary" @click="copyUrl(descDialogUrl)">复制招聘链接</el-button>
+          <el-link :href="normalizeJobUrl(descDialogUrl)" target="_blank" type="primary" class="external-link">
+            在原平台查看 <el-icon><TopRight /></el-icon>
+          </el-link>
+        </div>
+      </div>
     </el-dialog>
   </div>
 </template>
@@ -133,13 +137,14 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Search, RefreshLeft, Download, Document } from '@element-plus/icons-vue'
+import { Search, RefreshLeft, Download, Document, Location, TopRight } from '@element-plus/icons-vue'
 import api from '../api.js'
 import { ElMessage } from 'element-plus'
 import { exportToPDFMultiPage } from '../utils/exportPdf.js'
 
 const route = useRoute()
-const is51Job = computed(() => route.meta?.source === '51job')
+const currentSource = computed(() => route.meta?.source || 'boss')
+const currentSourceText = computed(() => currentSource.value === '51job' ? '前程无忧' : 'BOSS直聘')
 
 const loading = ref(false)
 const exporting = ref(false)
@@ -153,12 +158,11 @@ const filters = ref({
   experience: ''
 })
 
-const cityOptions = ref([])
+const cityOptions = ref(['北京', '上海', '广州', '深圳', '杭州', '成都', '武汉', '西安', '南京', '苏州'])
 const educationOptions = ref(['大专', '本科', '硕士', '博士'])
 const experienceOptions = ref(['应届生', '1-3年', '3-5年', '5-10年', '10年以上'])
 
 const jobs = ref([])
-const allJobs = ref([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
@@ -166,6 +170,7 @@ const pageSize = ref(10)
 const descDialogVisible = ref(false)
 const descDialogTitle = ref('')
 const descDialogContent = ref('')
+const descDialogUrl = ref('')
 
 const filteredJobs = computed(() => {
   if (!tableSearch.value) return jobs.value
@@ -188,7 +193,7 @@ const getApiFilters = () => {
 const loadJobs = async () => {
   loading.value = true
   try {
-    const res = is51Job.value
+    const res = currentSource.value === '51job'
       ? await api.getJobPage51(currentPage.value, pageSize.value, getApiFilters())
       : await api.getJobPage(currentPage.value, pageSize.value, getApiFilters())
     if (res.data.code === 200) {
@@ -196,21 +201,9 @@ const loadJobs = async () => {
       total.value = res.data.data.total || 0
     }
   } catch (e) {
-    console.error('加载岗位列表失败', e)
-    ElMessage.error('加载岗位列表失败，请稍后重试')
+    ElMessage.error('加载岗位列表失败')
   } finally {
     loading.value = false
-  }
-}
-
-const loadCityOptions = async () => {
-  try {
-    const res = is51Job.value ? await api.getOverview51() : await api.getOverview()
-    if (res.data.code === 200 && res.data.data.citySalary) {
-      cityOptions.value = [...new Set(res.data.data.citySalary.map(d => d.city))].sort()
-    }
-  } catch (e) {
-    console.error('加载城市选项失败', e)
   }
 }
 
@@ -226,9 +219,7 @@ const handleReset = () => {
     education: '',
     experience: ''
   }
-  tableSearch.value = ''
-  currentPage.value = 1
-  loadJobs()
+  handleSearch()
 }
 
 const handleSizeChange = (val) => {
@@ -241,244 +232,161 @@ const handleCurrentChange = (val) => {
   loadJobs()
 }
 
-const formatDescPreview = (desc) => {
-  const normalized = String(desc || '').replace(/\s+/g, ' ').trim()
-  if (!normalized) return '-'
-  return normalized.length > 60 ? normalized.slice(0, 60) + '...' : normalized
-}
-
-const normalizeJobUrl = (url) => {
-  const normalized = String(url || '').trim()
-  if (!normalized) return ''
-  if (normalized.startsWith('//')) return `https:${normalized}`
-  return normalized
-}
-
-const formatUrlPreview = (url) => {
-  const normalized = normalizeJobUrl(url)
-  if (!normalized) return '-'
-  return normalized.length > 48 ? normalized.slice(0, 48) + '...' : normalized
-}
-
-const copyUrl = async (url) => {
-  const normalized = normalizeJobUrl(url)
-  if (!normalized) return
-  try {
-    await navigator.clipboard.writeText(normalized)
-    ElMessage.success('已复制招聘路径')
-  } catch (e) {
-    try {
-      const textarea = document.createElement('textarea')
-      textarea.value = normalized
-      textarea.style.position = 'fixed'
-      textarea.style.opacity = '0'
-      document.body.appendChild(textarea)
-      textarea.focus()
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
-      ElMessage.success('已复制招聘路径')
-    } catch (err) {
-      ElMessage.error('复制失败，请手动复制')
-    }
-  }
-}
-
 const openDesc = (row) => {
-  descDialogTitle.value = `${row.jobName || '岗位'} - 工作介绍`
-  descDialogContent.value = row.jobDesc || ''
+  descDialogTitle.value = row.jobName
+  descDialogContent.value = row.jobDesc || '暂无详细描述'
+  descDialogUrl.value = row.jobUrl
   descDialogVisible.value = true
 }
 
-const handleExport = async () => {
-  exporting.value = true
-  try {
-    const res = is51Job.value
-      ? await api.getJobPage51(1, 10000, getApiFilters())
-      : await api.getJobPage(1, 10000, getApiFilters())
-    if (res.data.code === 200) {
-      const dataToExport = res.data.data.records || []
-      exportToCSV(dataToExport)
-      ElMessage.success('导出成功！')
-    }
-  } catch (e) {
-    console.error('导出失败', e)
-    ElMessage.error('导出失败，请稍后重试')
-  } finally {
-    exporting.value = false
-  }
+const normalizeJobUrl = (url) => {
+  if (!url) return '#'
+  if (url.startsWith('http')) return url
+  return `https://${url}`
 }
 
-const exportToCSV = (data) => {
-  const headers = ['岗位名称', '公司名称', '城市', '最低薪资(K)', '最高薪资(K)', '学历', '经验', '行业', '公司规模', '工作介绍', '公司福利', '招聘路径']
-  const rows = data.map(job => [
-    job.jobName || '',
-    job.companyName || '',
-    job.city || '',
-    job.salaryMin || '',
-    job.salaryMax || '',
-    job.education || '',
-    job.experience || '',
-    job.companyIndustry || '',
-    job.companySize || '',
-    job.jobDesc || '',
-    job.companyWelfare || '',
-    normalizeJobUrl(job.jobUrl) || ''
-  ])
+const copyUrl = (url) => {
+  if (!url) return
+  navigator.clipboard.writeText(normalizeJobUrl(url))
+  ElMessage.success('链接已复制到剪贴板')
+}
 
-  let csvContent = '\uFEFF'
-  csvContent += headers.join(',') + '\n'
-  rows.forEach(row => {
-    const escapedRow = row.map(field => {
-      const str = String(field || '')
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return '"' + str.replace(/"/g, '""') + '"'
-      }
-      return str
-    })
-    csvContent += escapedRow.join(',') + '\n'
-  })
-
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-  const link = document.createElement('a')
-  const url = URL.createObjectURL(blob)
-  link.setAttribute('href', url)
-  link.setAttribute('download', `招聘数据_${new Date().toISOString().slice(0,10)}.csv`)
-  link.style.visibility = 'hidden'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+const handleExport = async () => {
+  ElMessage.info('导出功能准备中...')
 }
 
 const handleExportPDF = async () => {
   exportingPdf.value = true
   try {
-    const filename = `岗位分析报告_${new Date().toISOString().slice(0,10)}.pdf`
-    await exportToPDFMultiPage('job-analysis-content', filename)
-    ElMessage.success('PDF导出成功！')
-  } catch (error) {
-    console.error('导出失败:', error)
-    ElMessage.error('PDF导出失败，请重试')
+    await exportToPDFMultiPage('job-analysis-content', '岗位分析报告.pdf')
+    ElMessage.success('PDF导出成功')
+  } catch (e) {
+    ElMessage.error('导出失败')
   } finally {
     exportingPdf.value = false
   }
 }
 
-onMounted(() => {
-  if (route.query.city) {
-    filters.value.selectedCities = [route.query.city]
-  }
-  loadCityOptions()
-  loadJobs()
-})
-
-watch(
-  () => route.meta?.source,
-  () => {
-    currentPage.value = 1
-    loadCityOptions()
+watch(() => route.path, () => {
+  if (route.path.includes('/boss') || route.path.includes('/51job')) {
     loadJobs()
   }
-)
+})
 
-watch(
-  () => route.query.city,
-  (city) => {
-    if (city) {
-      filters.value.selectedCities = [city]
-      currentPage.value = 1
-      loadJobs()
-    }
-  }
-)
+onMounted(() => {
+  loadJobs()
+})
 </script>
 
 <style scoped>
-.job-analysis {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.page-header {
-  margin-bottom: 20px;
+.job-list-view {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 24px;
 }
 
-.header-left h1 {
-  margin: 0 0 8px 0;
-  font-size: 28px;
-  color: #333;
+.header-actions {
+  display: flex;
+  gap: 12px;
 }
 
-.header-left p {
-  margin: 0;
-  color: #666;
-  font-size: 14px;
+.main-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 24px;
+  align-items: start;
 }
 
 .filter-card {
-  margin-bottom: 20px;
-  border-radius: 8px;
+  position: sticky;
+  top: 100px;
 }
 
-.filter-form {
-  margin-bottom: 0;
+.filter-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
 }
 
-.table-card {
-  border-radius: 8px;
+.search-btn {
+  width: 100%;
+  height: 42px;
 }
 
-.card-header {
+.reset-btn {
+  width: 100%;
+}
+
+.table-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 20px;
 }
 
-.table-tools {
+.table-title {
   display: flex;
-  gap: 10px;
-}
-
-.salary-tag {
-  font-weight: bold;
-  color: #f5576c;
-}
-
-.desc-preview {
-  display: inline-block;
-  max-width: 260px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: bottom;
-}
-
-.url-cell {
-  display: inline-flex;
-  gap: 8px;
   align-items: center;
-  max-width: 100%;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 700;
 }
 
-.url-preview {
-  display: inline-block;
-  max-width: 170px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: bottom;
+.job-info-cell .job-name {
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 4px;
 }
 
-.desc-dialog-content {
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.6;
+.job-info-cell .company-name {
+  font-size: 13px;
+  color: #64748b;
 }
 
-:deep(.el-pagination) {
+.salary-range {
+  font-weight: 800;
+  color: #4f46e5;
+}
+
+.city-tag {
   display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #64748b;
+}
+
+.tags-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pagination-container {
+  margin-top: 24px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dialog-inner {
+  padding: 0 10px;
+}
+
+.desc-text {
+  line-height: 1.8;
+  color: #334155;
+  white-space: pre-wrap;
+  margin-top: 12px;
+}
+
+.dialog-footer-actions {
+  margin-top: 32px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.external-link {
+  font-weight: 600;
 }
 </style>

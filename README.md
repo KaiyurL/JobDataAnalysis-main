@@ -112,6 +112,9 @@ Python 爬虫的数据库连接信息在 `crawler/spider.py` 的 `DB_CONFIG` 中
   - `city_codes_51job`（前程无忧城市编码映射）
   - `delay_min` / `delay_max`（请求间隔，建议保守一点避免风控）
   - `browser`: `auto` / `edge` / `chrome`（选择启动浏览器）
+  - 浏览器路径（Windows）：若你的 Edge/Chrome 安装路径不在默认位置，需要修改 `crawler/spider.py` 的 `find_browser_path()`：
+    - `edge_candidates`（msedge.exe 路径列表）
+    - `chrome_candidates`（chrome.exe 路径列表）
 
 4) AI 智能求职助手（阿里云百炼）
 - 后端会从系统环境变量读取 API Key（推荐方式）：

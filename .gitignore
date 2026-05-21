@@ -68,7 +68,8 @@ dist-ssr/
 *.sqlite
 
 # Data/Models (ignored)
-data/
+crawler/data/
+crawler/output/
 models/
 notebooks/.ipynb_checkpoints/
 

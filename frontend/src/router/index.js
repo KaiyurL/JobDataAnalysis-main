@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Dashboard from '../views/Dashboard.vue'
+import JobAnalysisLayout from '../views/JobAnalysisLayout.vue'
 import JobAnalysis from '../views/JobAnalysis.vue'
 import SkillAnalysis from '../views/SkillAnalysis.vue'
 import SalaryPredict from '../views/SalaryPredict.vue'
@@ -23,49 +24,58 @@ const routes = [
     path: '/dashboard',
     name: 'Dashboard',
     component: Dashboard,
-    meta: { title: '仪表盘', requiresAuth: true }
+    meta: { title: '数据仪表盘', requiresAuth: true, icon: 'Odometer' }
   },
   {
     path: '/job-analysis',
-    name: 'JobAnalysis',
-    component: JobAnalysis,
-    meta: { title: '岗位分析', requiresAuth: true }
-  },
-  {
-    path: '/job-analysis-51job',
-    name: 'JobAnalysis51Job',
-    component: JobAnalysis,
-    meta: { title: '岗位分析(前程无忧)', requiresAuth: true, source: '51job' }
-  },
-  {
-    path: '/skill-analysis',
-    name: 'SkillAnalysis',
-    component: SkillAnalysis,
-    meta: { title: '技能分析', requiresAuth: true }
-  },
-  {
-    path: '/salary-predict',
-    name: 'SalaryPredict',
-    component: SalaryPredict,
-    meta: { title: '薪资预测', requiresAuth: true }
+    name: 'JobAnalysisRoot',
+    component: JobAnalysisLayout,
+    redirect: '/job-analysis/boss',
+    meta: { title: '岗位分析', requiresAuth: true, icon: 'Briefcase' },
+    children: [
+      {
+        path: 'boss',
+        name: 'JobAnalysisBoss',
+        component: JobAnalysis,
+        meta: { title: 'BOSS直聘', requiresAuth: true, source: 'boss' }
+      },
+      {
+        path: '51job',
+        name: 'JobAnalysis51Job',
+        component: JobAnalysis,
+        meta: { title: '前程无忧', requiresAuth: true, source: '51job' }
+      },
+      {
+        path: 'skills',
+        name: 'SkillAnalysis',
+        component: SkillAnalysis,
+        meta: { title: '技能分析', requiresAuth: true }
+      },
+      {
+        path: 'salary',
+        name: 'SalaryPredict',
+        component: SalaryPredict,
+        meta: { title: '薪资预测', requiresAuth: true }
+      },
+      {
+        path: 'insight',
+        name: 'CompanyInsight',
+        component: CompanyInsight,
+        meta: { title: '公司洞察', requiresAuth: true }
+      }
+    ]
   },
   {
     path: '/job-match',
     name: 'JobMatch',
     component: JobMatch,
-    meta: { title: '智能求职助手', requiresAuth: true }
-  },
-  {
-    path: '/company-insight',
-    name: 'CompanyInsight',
-    component: CompanyInsight,
-    meta: { title: '公司洞察', requiresAuth: true }
+    meta: { title: '智能助手', requiresAuth: true, icon: 'User' }
   },
   {
     path: '/data-management',
     name: 'DataManagement',
     component: DataManagement,
-    meta: { title: '数据管理', requiresAuth: true }
+    meta: { title: '系统设置', requiresAuth: true, icon: 'Setting' }
   }
 ]
 
@@ -79,10 +89,8 @@ router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token')
   
   if (to.meta.requiresAuth && !token) {
-    // 需要登录但没有token
     next('/login')
   } else if (to.path === '/login' && token) {
-    // 已登录但访问登录页
     next('/dashboard')
   } else {
     next()

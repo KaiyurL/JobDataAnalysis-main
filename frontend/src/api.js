@@ -40,11 +40,11 @@ api.interceptors.response.use(
 
 export default {
   getOverview(filters = {}) {
-    return api.get('/jobs/stats/overview', { params: filters })
+    return api.get('/jobs/stats/overview', { params: filters, timeout: 60000 })
   },
 
   getOverview51(filters = {}) {
-    return api.get('/jobs51/stats/overview', { params: filters })
+    return api.get('/jobs51/stats/overview', { params: filters, timeout: 60000 })
   },
   
   getCitySalary(filters = {}) {
@@ -164,5 +164,21 @@ export default {
 
   careerChat(data) {
     return api.post('/ai/career-chat', data, { timeout: 60000 })
+  },
+
+  runDashboardPipeline() {
+    return api.post('/pipeline/dashboard/run', {}, { timeout: 60000 })
+  },
+
+  getPipelineStatus() {
+    return api.get('/pipeline/status', { timeout: 60000 })
+  },
+
+  getPipelineArtifacts() {
+    return api.get('/pipeline/artifacts', { timeout: 60000 })
+  },
+
+  getPipelineFile(key) {
+    return api.get('/pipeline/file', { params: { key }, responseType: 'blob', timeout: 60000 })
   }
 }
