@@ -166,12 +166,31 @@ export default {
     return api.post('/ai/career-chat', data, { timeout: 60000 })
   },
 
+  parseResume(file) {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/resume/parse', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      timeout: 60000
+    })
+  },
+
   runDashboardPipeline() {
     return api.post('/pipeline/dashboard/run', {}, { timeout: 60000 })
   },
 
   runDashboardPipelineForce() {
     return api.post('/pipeline/dashboard/run', {}, { params: { force: true }, timeout: 60000 })
+  },
+
+  runStatsPipeline() {
+    return api.post('/pipeline/stats/run', {}, { timeout: 60000 })
+  },
+
+  runStatsPipelineForce() {
+    return api.post('/pipeline/stats/run', {}, { params: { force: true }, timeout: 60000 })
   },
 
   getPipelineStatus() {

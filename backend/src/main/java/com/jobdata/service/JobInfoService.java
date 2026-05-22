@@ -11,11 +11,11 @@ public interface JobInfoService extends IService<JobInfo> {
 
     Page<JobInfo> pageQuery(Integer current, Integer size, String keyword, String city, String education, String experience);
 
-    List<CitySalaryDTO> getCitySalaryStats(String keyword, String education, String experience);
+    List<CitySalaryDTO> getCitySalaryStats(String keyword, String city, String education, String experience);
 
-    List<EducationSalaryDTO> getEducationSalaryStats(String keyword, String education, String experience);
+    List<EducationSalaryDTO> getEducationSalaryStats(String keyword, String city, String education, String experience);
 
-    List<ExperienceSalaryDTO> getExperienceSalaryStats(String keyword, String education, String experience);
+    List<ExperienceSalaryDTO> getExperienceSalaryStats(String keyword, String city, String education, String experience);
 
     List<KeywordDTO> getKeywordStats(String keyword, String city, String education, String experience);
 
@@ -30,5 +30,7 @@ public interface JobInfoService extends IService<JobInfo> {
     List<CompanySalaryDTO> getCompanySalaryStats();
 
     List<CompanySizeDTO> getCompanySizeStats();
+
+    List<JobMatchDTO> matchJobs(JobMatchRequest request);
 
 }

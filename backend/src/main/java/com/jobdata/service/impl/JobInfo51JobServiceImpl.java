@@ -44,8 +44,8 @@ public class JobInfo51JobServiceImpl extends ServiceImpl<JobInfo51JobMapper, Job
     }
 
     @Override
-    public List<CitySalaryDTO> getCitySalaryStats(String keyword, String education, String experience) {
-        LambdaQueryWrapper<JobInfo51Job> wrapper = buildQueryWrapper(keyword, null, education, experience);
+    public List<CitySalaryDTO> getCitySalaryStats(String keyword, String city, String education, String experience) {
+        LambdaQueryWrapper<JobInfo51Job> wrapper = buildQueryWrapper(keyword, city, education, experience);
         List<JobInfo51Job> list = this.list(wrapper);
         Map<String, List<JobInfo51Job>> cityMap = list.stream()
                 .filter(job -> job.getSalaryAvg() != null)
@@ -66,8 +66,8 @@ public class JobInfo51JobServiceImpl extends ServiceImpl<JobInfo51JobMapper, Job
     }
 
     @Override
-    public List<EducationSalaryDTO> getEducationSalaryStats(String keyword, String education, String experience) {
-        LambdaQueryWrapper<JobInfo51Job> wrapper = buildQueryWrapper(keyword, null, null, experience);
+    public List<EducationSalaryDTO> getEducationSalaryStats(String keyword, String city, String education, String experience) {
+        LambdaQueryWrapper<JobInfo51Job> wrapper = buildQueryWrapper(keyword, city, education, experience);
         List<JobInfo51Job> list = this.list(wrapper);
         Map<String, List<JobInfo51Job>> eduMap = list.stream()
                 .filter(job -> job.getSalaryAvg() != null && StringUtils.hasText(job.getEducation()))
@@ -86,8 +86,8 @@ public class JobInfo51JobServiceImpl extends ServiceImpl<JobInfo51JobMapper, Job
     }
 
     @Override
-    public List<ExperienceSalaryDTO> getExperienceSalaryStats(String keyword, String education, String experience) {
-        LambdaQueryWrapper<JobInfo51Job> wrapper = buildQueryWrapper(keyword, null, education, null);
+    public List<ExperienceSalaryDTO> getExperienceSalaryStats(String keyword, String city, String education, String experience) {
+        LambdaQueryWrapper<JobInfo51Job> wrapper = buildQueryWrapper(keyword, city, education, experience);
         List<JobInfo51Job> list = this.list(wrapper);
         Map<String, List<JobInfo51Job>> expMap = list.stream()
                 .filter(job -> job.getSalaryAvg() != null && StringUtils.hasText(job.getExperience()))
@@ -158,4 +158,3 @@ public class JobInfo51JobServiceImpl extends ServiceImpl<JobInfo51JobMapper, Job
         return this.count(wrapper);
     }
 }
-

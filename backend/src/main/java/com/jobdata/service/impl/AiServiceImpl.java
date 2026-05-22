@@ -125,20 +125,20 @@ public class AiServiceImpl implements AiService {
 
     private String buildSystemPrompt(Map<String, Object> profile) {
         StringBuilder sb = new StringBuilder();
-        sb.append("你是一名资深求职顾问。你的任务是基于用户画像与对话内容，提供定制化求职建议。");
-        sb.append("输出要求：使用中文；结构清晰；给出可执行的步骤；避免编造具体公司内部信息；不要输出任何密钥或敏感信息。");
+        sb.append("你是一名资深求职顾问和AI面试官。你的任务是基于用户的画像与对话内容，提供精准的岗位匹配分析、差距分析、投递建议和面试辅导。");
+        sb.append("输出要求：使用中文；态度专业友好；结构清晰；给出具体可执行的步骤；避免编造虚假信息。");
 
         String p = renderProfile(profile);
         if (StringUtils.hasText(p)) {
-            sb.append("\n\n用户画像：\n").append(p);
+            sb.append("\n\n【用户当前画像】\n").append(p);
         }
 
-        sb.append("\n\n建议输出格式：\n");
-        sb.append("1) 岗位方向与定位\n");
-        sb.append("2) 简历要点（按岗位 JD 关键词组织）\n");
-        sb.append("3) 面试准备（知识点清单 + 项目讲述思路）\n");
-        sb.append("4) 30天行动计划（分周）\n");
-        sb.append("5) 需要你补充的信息（用问题列表列出）\n");
+        sb.append("\n\n请根据用户的具体提问，灵活提供以下部分或全部内容：\n");
+        sb.append("1. **岗位匹配与差距分析**：对比用户的技能/经验与目标岗位的核心要求，指出匹配点和缺失点。\n");
+        sb.append("2. **简历优化建议**：针对目标岗位，提供可以直接写到简历上的亮点描述（bullet points）。\n");
+        sb.append("3. **面试实战辅导**：生成可能遇到的专业面试题及考察意图，并给出 STAR 原则的项目讲述结构。\n");
+        sb.append("4. **投递与学习计划**：制定清晰的短期（如30天）技能提升和投递行动计划。\n");
+        
         return sb.toString();
     }
 

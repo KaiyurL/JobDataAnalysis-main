@@ -38,12 +38,11 @@ public class JobInfo51JobController {
             @RequestParam(required = false) String experience) {
         Map<String, Object> overview = new HashMap<>();
         overview.put("total", jobInfo51JobService.getTotalCount(keyword, city, education, experience));
-        overview.put("citySalary", jobInfo51JobService.getCitySalaryStats(keyword, education, experience));
-        overview.put("educationSalary", jobInfo51JobService.getEducationSalaryStats(keyword, education, experience));
-        overview.put("experienceSalary", jobInfo51JobService.getExperienceSalaryStats(keyword, education, experience));
+        overview.put("citySalary", jobInfo51JobService.getCitySalaryStats(keyword, city, education, experience));
+        overview.put("educationSalary", jobInfo51JobService.getEducationSalaryStats(keyword, city, education, experience));
+        overview.put("experienceSalary", jobInfo51JobService.getExperienceSalaryStats(keyword, city, education, experience));
         overview.put("keywords", jobInfo51JobService.getKeywordStats(keyword, city, education, experience));
         overview.put("industry", jobInfo51JobService.getIndustryStats(keyword, city, education, experience));
         return Result.success(overview);
     }
 }
-

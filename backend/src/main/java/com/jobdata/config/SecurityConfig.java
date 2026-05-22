@@ -25,6 +25,7 @@ public class SecurityConfig {
                 .and()
                 .authorizeHttpRequests()
                 .antMatchers("/api/auth/**").permitAll()
+                .antMatchers("/api/resume/parse").permitAll()
                 .antMatchers("/api/**").authenticated()
                 .anyRequest().permitAll();
 

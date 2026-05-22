@@ -50,8 +50,8 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
     }
 
     @Override
-    public List<CitySalaryDTO> getCitySalaryStats(String keyword, String education, String experience) {
-        LambdaQueryWrapper<JobInfo> wrapper = buildQueryWrapper(keyword, null, education, experience);
+    public List<CitySalaryDTO> getCitySalaryStats(String keyword, String city, String education, String experience) {
+        LambdaQueryWrapper<JobInfo> wrapper = buildQueryWrapper(keyword, city, education, experience);
         List<JobInfo> list = this.list(wrapper);
         Map<String, List<JobInfo>> cityMap = list.stream()
                 .filter(job -> job.getSalaryAvg() != null)
@@ -72,8 +72,8 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
     }
 
     @Override
-    public List<EducationSalaryDTO> getEducationSalaryStats(String keyword, String education, String experience) {
-        LambdaQueryWrapper<JobInfo> wrapper = buildQueryWrapper(keyword, null, null, experience);
+    public List<EducationSalaryDTO> getEducationSalaryStats(String keyword, String city, String education, String experience) {
+        LambdaQueryWrapper<JobInfo> wrapper = buildQueryWrapper(keyword, city, education, experience);
         List<JobInfo> list = this.list(wrapper);
         Map<String, List<JobInfo>> eduMap = list.stream()
                 .filter(job -> job.getSalaryAvg() != null && StringUtils.hasText(job.getEducation()))
@@ -92,8 +92,8 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
     }
 
     @Override
-    public List<ExperienceSalaryDTO> getExperienceSalaryStats(String keyword, String education, String experience) {
-        LambdaQueryWrapper<JobInfo> wrapper = buildQueryWrapper(keyword, null, education, null);
+    public List<ExperienceSalaryDTO> getExperienceSalaryStats(String keyword, String city, String education, String experience) {
+        LambdaQueryWrapper<JobInfo> wrapper = buildQueryWrapper(keyword, city, education, experience);
         List<JobInfo> list = this.list(wrapper);
         Map<String, List<JobInfo>> expMap = list.stream()
                 .filter(job -> job.getSalaryAvg() != null && StringUtils.hasText(job.getExperience()))
@@ -335,6 +335,187 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
             return dto;
         }).sorted((a, b) -> b.getCount().compareTo(a.getCount()))
           .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<JobMatchDTO> matchJobs(JobMatchRequest request) {
+        if (request == null || !StringUtils.hasText(request.getTargetRole())) {
+            return new ArrayList<>();
+        }
+
+        List<String> roleList = Arrays.stream(request.getTargetRole().split("[,，/\\s]+"))
+                .map(s -> s == null ? "" : s.trim())
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toList());
+
+        List<String> cityList = new ArrayList<>();
+        if (StringUtils.hasText(request.getCity())) {
+            cityList = Arrays.stream(request.getCity().split("[,，/]"))
+                    .map(s -> s == null ? "" : s.trim())
+                    .filter(StringUtils::hasText)
+                    .collect(Collectors.toList());
+        }
+
+        LambdaQueryWrapper<JobInfo> wrapperBoss = new LambdaQueryWrapper<>();
+        if (!cityList.isEmpty()) {
+            wrapperBoss.in(JobInfo::getCity, cityList);
+        }
+        wrapperBoss.and(w -> {
+            for (String role : roleList) {
+                w.or().like(JobInfo::getJobName, role);
+            }
+        });
+        wrapperBoss.last("LIMIT 200");
+        List<JobInfo> candidatesBoss = this.list(wrapperBoss);
+
+        LambdaQueryWrapper<JobInfo51Job> wrapper51 = new LambdaQueryWrapper<>();
+        if (!cityList.isEmpty()) {
+            wrapper51.in(JobInfo51Job::getCity, cityList);
+        }
+        wrapper51.and(w -> {
+            for (String role : roleList) {
+                w.or().like(JobInfo51Job::getJobName, role);
+            }
+        });
+        wrapper51.last("LIMIT 200");
+        List<JobInfo51Job> candidates51 = jobInfo51JobService.list(wrapper51);
+
+        // 获取用户技能集合
+        Set<String> userSkills = new HashSet<>();
+        if (StringUtils.hasText(request.getSkills())) {
+            for (String s : request.getSkills().split("[,，\\s]+")) {
+                if (StringUtils.hasText(s)) {
+                    userSkills.add(s.trim().toLowerCase());
+                }
+            }
+        }
+
+        class Candidate {
+            JobInfo job;
+            String sourceTable;
+
+            Candidate(JobInfo job, String sourceTable) {
+                this.job = job;
+                this.sourceTable = sourceTable;
+            }
+        }
+
+        List<Candidate> allCandidates = new ArrayList<>();
+        for (JobInfo j : candidatesBoss) {
+            allCandidates.add(new Candidate(j, "job_info"));
+        }
+        for (JobInfo51Job j : candidates51) {
+            allCandidates.add(new Candidate(toJobInfo(j), "job_info_51job"));
+        }
+
+        List<JobMatchDTO> results = new ArrayList<>();
+        Set<String> addedKeys = new HashSet<>();
+
+        for (Candidate c : allCandidates) {
+            JobInfo job = c.job;
+
+            String key = buildJobKey(job);
+            if (StringUtils.hasText(key) && addedKeys.contains(key)) {
+                continue;
+            }
+            if (StringUtils.hasText(key)) {
+                addedKeys.add(key);
+            }
+
+            double score = 0.0;
+            StringBuilder reason = new StringBuilder();
+
+            // 1. 经验匹配分 (简单规则)
+            if (StringUtils.hasText(request.getExperience()) && request.getExperience().equals(job.getExperience())) {
+                score += 30;
+                reason.append("经验要求匹配; ");
+            } else if (StringUtils.hasText(job.getExperience()) && job.getExperience().contains("不限")) {
+                score += 15;
+                reason.append("经验不限; ");
+            }
+
+            // 2. 学历匹配分
+            if (StringUtils.hasText(request.getEducation()) && request.getEducation().equals(job.getEducation())) {
+                score += 20;
+                reason.append("学历匹配; ");
+            }
+
+            // 3. 技能关键词命中分
+            int skillHitCount = 0;
+            if (StringUtils.hasText(job.getJobKeywords())) {
+                String jobKw = job.getJobKeywords().toLowerCase();
+                for (String s : userSkills) {
+                    if (jobKw.contains(s)) {
+                        skillHitCount++;
+                        score += 15;
+                    }
+                }
+            } else if (StringUtils.hasText(job.getJobDesc())) {
+                String desc = job.getJobDesc().toLowerCase();
+                for (String s : userSkills) {
+                    if (desc.contains(s)) {
+                        skillHitCount++;
+                        score += 8;
+                    }
+                }
+            }
+            if (skillHitCount > 0) {
+                reason.append("命中 ").append(skillHitCount).append(" 项核心技能; ");
+            }
+
+            // 如果连一点都没匹配上，说明只是强召回回来的，过滤掉
+            if (score < 10 && skillHitCount == 0 && !reason.toString().contains("经验") && !reason.toString().contains("学历")) {
+                continue;
+            }
+
+            JobMatchDTO dto = new JobMatchDTO();
+            dto.setJob(job);
+            dto.setMatchScore(Math.min(99.0, score + 10 + (Math.random() * 5))); // 基础分+扰动避免同分
+            dto.setMatchReason(reason.length() > 0 ? reason.substring(0, reason.length() - 2) : "符合基础条件");
+            dto.setSourceTable(c.sourceTable);
+            results.add(dto);
+        }
+
+        // 按分数降序，返回 Top 30
+        return results.stream()
+                .sorted((a, b) -> b.getMatchScore().compareTo(a.getMatchScore()))
+                .limit(30)
+                .peek(dto -> dto.setMatchScore(Math.round(dto.getMatchScore() * 10.0) / 10.0)) // 保留一位小数
+                .collect(Collectors.toList());
+    }
+
+    private static JobInfo toJobInfo(JobInfo51Job src) {
+        JobInfo out = new JobInfo();
+        out.setId(src.getId());
+        out.setJobName(src.getJobName());
+        out.setCompanyName(src.getCompanyName());
+        out.setCity(src.getCity());
+        out.setJobUrl(src.getJobUrl());
+        out.setSalaryMin(src.getSalaryMin());
+        out.setSalaryMax(src.getSalaryMax());
+        out.setSalaryAvg(src.getSalaryAvg());
+        out.setExperience(src.getExperience());
+        out.setEducation(src.getEducation());
+        out.setJobDesc(src.getJobDesc());
+        out.setJobKeywords(src.getJobKeywords());
+        out.setCompanySize(src.getCompanySize());
+        out.setCompanyIndustry(src.getCompanyIndustry());
+        out.setCompanyWelfare(src.getCompanyWelfare());
+        out.setPublishDate(src.getPublishDate());
+        out.setCreatedAt(src.getCreatedAt());
+        return out;
+    }
+
+    private static String buildJobKey(JobInfo job) {
+        if (job == null) return null;
+        if (StringUtils.hasText(job.getJobUrl())) {
+            return job.getJobUrl().trim().toLowerCase();
+        }
+        String a = StringUtils.hasText(job.getJobName()) ? job.getJobName().trim() : "";
+        String b = StringUtils.hasText(job.getCompanyName()) ? job.getCompanyName().trim() : "";
+        String c = StringUtils.hasText(job.getCity()) ? job.getCity().trim() : "";
+        String key = (a + "|" + b + "|" + c).toLowerCase();
+        return key.isBlank() ? null : key;
     }
 
 }

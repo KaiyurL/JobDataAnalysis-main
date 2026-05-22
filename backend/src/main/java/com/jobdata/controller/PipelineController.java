@@ -34,6 +34,15 @@ public class PipelineController {
         }
     }
 
+    @PostMapping("/stats/run")
+    public Result<?> runStats(@RequestParam(value = "force", required = false, defaultValue = "false") boolean force) {
+        try {
+            return Result.success(pipelineService.startStatsPipeline(force));
+        } catch (Exception e) {
+            return Result.error("启动 Stats 失败: " + e.getMessage());
+        }
+    }
+
     @GetMapping("/status")
     public Result<?> status() {
         try {

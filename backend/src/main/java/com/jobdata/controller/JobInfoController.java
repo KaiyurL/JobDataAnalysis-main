@@ -34,25 +34,28 @@ public class JobInfoController {
     @GetMapping("/stats/city-salary")
     public Result<List<CitySalaryDTO>> getCitySalaryStats(
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String city,
             @RequestParam(required = false) String education,
             @RequestParam(required = false) String experience) {
-        return Result.success(jobInfoService.getCitySalaryStats(keyword, education, experience));
+        return Result.success(jobInfoService.getCitySalaryStats(keyword, city, education, experience));
     }
 
     @GetMapping("/stats/education-salary")
     public Result<List<EducationSalaryDTO>> getEducationSalaryStats(
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String city,
             @RequestParam(required = false) String education,
             @RequestParam(required = false) String experience) {
-        return Result.success(jobInfoService.getEducationSalaryStats(keyword, education, experience));
+        return Result.success(jobInfoService.getEducationSalaryStats(keyword, city, education, experience));
     }
 
     @GetMapping("/stats/experience-salary")
     public Result<List<ExperienceSalaryDTO>> getExperienceSalaryStats(
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String city,
             @RequestParam(required = false) String education,
             @RequestParam(required = false) String experience) {
-        return Result.success(jobInfoService.getExperienceSalaryStats(keyword, education, experience));
+        return Result.success(jobInfoService.getExperienceSalaryStats(keyword, city, education, experience));
     }
 
     @GetMapping("/stats/keywords")
@@ -90,9 +93,9 @@ public class JobInfoController {
             @RequestParam(required = false) String experience) {
         Map<String, Object> overview = new HashMap<>();
         overview.put("total", jobInfoService.getTotalCount(keyword, city, education, experience));
-        overview.put("citySalary", jobInfoService.getCitySalaryStats(keyword, education, experience));
-        overview.put("educationSalary", jobInfoService.getEducationSalaryStats(keyword, education, experience));
-        overview.put("experienceSalary", jobInfoService.getExperienceSalaryStats(keyword, education, experience));
+        overview.put("citySalary", jobInfoService.getCitySalaryStats(keyword, city, education, experience));
+        overview.put("educationSalary", jobInfoService.getEducationSalaryStats(keyword, city, education, experience));
+        overview.put("experienceSalary", jobInfoService.getExperienceSalaryStats(keyword, city, education, experience));
         overview.put("keywords", jobInfoService.getKeywordStats(keyword, city, education, experience));
         overview.put("industry", jobInfoService.getIndustryStats(keyword, city, education, experience));
         return Result.success(overview);
@@ -113,9 +116,9 @@ public class JobInfoController {
         return Result.success(jobInfoService.getCompanySalaryStats());
     }
 
-    @GetMapping("/stats/company-size")
-    public Result<List<CompanySizeDTO>> getCompanySizeStats() {
-        return Result.success(jobInfoService.getCompanySizeStats());
+    @PostMapping("/match/jobs")
+    public Result<List<JobMatchDTO>> matchJobs(@RequestBody JobMatchRequest request) {
+        return Result.success(jobInfoService.matchJobs(request));
     }
 
 }

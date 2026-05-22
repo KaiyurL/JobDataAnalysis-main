@@ -1,10 +1,10 @@
 {
-  "platform" : "51job",
-  "keywords" : [ "数据分析", "ai", "python", "java", "c++", "Linux", "小程序", "嵌入式", "go", "深度学习", ".net", "C#", "游戏开发", "vue" ],
-  "cities" : [ "北京", "上海", "厦门", "福州" ],
-  "pages_per_keyword" : 2,
-  "pages_per_city_51job" : 10,
-  "delay_min" : 3,
+  "platform" : "boss",
+  "keywords" : [ "python"],
+  "cities" : [ "厦门" ],
+  "pages_per_keyword" : 1,
+  "pages_per_city_51job" : 1,
+  "delay_min" : 4,
   "delay_max" : 8,
   "city_codes_51job" : {
     "北京" : "010000",

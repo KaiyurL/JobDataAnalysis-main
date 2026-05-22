@@ -281,6 +281,54 @@ def extract_keywords(text):
     keywords = [w for w in words if len(w) >= 2 and w not in stop_words]
     return ','.join(keywords[:20])
 
+def extract_welfare_from_desc(job_desc):
+    if not isinstance(job_desc, str):
+        return None
+
+    text = re.sub(r"\r\n?", "\n", job_desc).strip()
+    if not text:
+        return None
+
+    if not re.search(r"福利|待遇|薪酬福利|员工福利|我们提供|公司提供", text):
+        return None
+
+    heading = re.compile(r"(?im)^(?:\s*)(福利待遇|薪酬福利|员工福利|公司福利|福利|待遇)\s*[:：]?")
+    stop_heading = re.compile(
+        r"(?im)^(?:\s*)(岗位职责|工作职责|职责描述|工作内容|职位描述|任职要求|岗位要求|任职资格|职位要求|职位亮点|工作地点|联系方式|公司介绍|企业介绍)\s*[:：]?"
+    )
+
+    m = heading.search(text)
+    if m:
+        start = m.start()
+        tail = text[start:]
+        m2 = stop_heading.search(tail[m.end() - start :])
+        if m2:
+            end = (m.end() - start) + m2.start()
+            block = tail[:end]
+        else:
+            block = tail
+        block = re.sub(r"\n{3,}", "\n\n", block).strip()
+        return block if block else None
+
+    lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
+    if not lines:
+        return None
+
+    welfare_terms = re.compile(
+        r"五险一金|六险一金|补充医疗|商业保险|带薪年假|年终奖|绩效奖金|节日福利|定期体检|周末双休|双休|弹性工作|加班补助|餐补|交通补贴|通讯补贴|住房补贴|住房公积金|员工旅游|团建|下午茶|免费班车|股票期权|入职培训|晋升|落户"
+    )
+    keep = []
+    for ln in lines:
+        if re.search(r"福利|待遇|我们提供|公司提供", ln) or welfare_terms.search(ln):
+            keep.append(ln)
+
+    if not keep:
+        return None
+
+    merged = "；".join(dict.fromkeys(keep))
+    merged = re.sub(r"[；\s]+$", "", merged).strip()
+    return merged if merged else None
+
 def get_city_code_51job(city_name, config):
     codes = (config or {}).get("city_codes_51job") or {}
     code = codes.get(city_name) if isinstance(codes, dict) else None
@@ -463,7 +511,7 @@ def _insert_job(table_name, job_data):
                 job_data['job_keywords'], # 关键词
                 job_data['company_size'], # 公司规模
                 job_data['company_industry'], # 公司行业
-                job_data.get('company_welfare'),
+                job_data.get('company_welfare'), # 公司福利
                 publish_date # 发布日期
             ))
         conn.commit()
@@ -796,6 +844,10 @@ def scrape_jobs(platform_override=None, browser_override=None):
                                         job_desc = job_desc.strip() or None
                                     else:
                                         job_desc = None
+
+                                    welfare_from_desc = extract_welfare_from_desc(job_desc)
+                                    if (not welfare or not str(welfare).strip()) and welfare_from_desc:
+                                        welfare = welfare_from_desc
 
                                     job_url = (
                                         item.get("jobHref")

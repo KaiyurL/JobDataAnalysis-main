@@ -149,6 +149,79 @@ public class PipelineServiceImpl implements PipelineService {
     }
 
     @Override
+    public Map<String, Object> startStatsPipeline() {
+        return startStatsPipeline(false);
+    }
+
+    @Override
+    public Map<String, Object> startStatsPipeline(boolean force) {
+        Map<String, Object> result = new HashMap<>();
+        synchronized (lock) {
+            if ("running".equals(status)) {
+                result.put("success", false);
+                result.put("message", "Pipeline 正在运行中");
+                return result;
+            }
+
+            Map<String, Object> fingerprint = safeGetFingerprint();
+            if (!force && fingerprint != null && lastFingerprint != null
+                    && mapper.valueToTree(lastFingerprint).equals(mapper.valueToTree(fingerprint))
+                    && lastArtifacts != null && artifactExists(lastArtifacts.get("top_tokens"))) {
+                status = "idle";
+                lastStartTime = LocalDateTime.now();
+                lastEndTime = LocalDateTime.now();
+                lastExitCode = 0;
+                lastMessage = "已使用缓存 Top Tokens（数据未变化）";
+                lastFingerprint = new LinkedHashMap<>(fingerprint);
+                lastCached = true;
+                lastSummary = buildSummary(lastArtifacts, lastErrors);
+                synchronized (logs) {
+                    logs.clear();
+                    addLog("[Cache] 命中缓存，跳过 stats");
+                }
+                result.put("success", true);
+                result.put("cached", true);
+                result.put("message", lastMessage);
+                result.put("status", status);
+                result.put("runDir", lastRunDir);
+                return result;
+            }
+
+            status = "running";
+            lastStartTime = LocalDateTime.now();
+            lastEndTime = null;
+            lastExitCode = null;
+            lastMessage = force ? "Stats 已启动（强制重算）" : "Stats 已启动";
+            lastFingerprint = fingerprint == null ? new LinkedHashMap<>() : new LinkedHashMap<>(fingerprint);
+            lastCached = false;
+            synchronized (logs) {
+                logs.clear();
+            }
+
+            new Thread(() -> {
+                try {
+                    runStats();
+                    status = "idle";
+                    lastMessage = "Stats 运行完成";
+                } catch (Exception e) {
+                    status = "failed";
+                    lastMessage = "Stats 运行失败: " + e.getMessage();
+                    addLog("[ERROR] " + e.getMessage());
+                } finally {
+                    lastEndTime = LocalDateTime.now();
+                    currentProcess = null;
+                }
+            }, "pipeline-stats-runner").start();
+
+            result.put("success", true);
+            result.put("message", "Stats 已启动");
+            result.put("status", status);
+            result.put("cached", false);
+            return result;
+        }
+    }
+
+    @Override
     public Map<String, Object> getPipelineStatus() {
         Map<String, Object> result = new HashMap<>();
         result.put("status", status);
@@ -190,11 +263,9 @@ public class PipelineServiceImpl implements PipelineService {
         }
         try {
             Path p = Paths.get(path).toAbsolutePath().normalize();
-            if (lastRunDir != null && !lastRunDir.trim().isEmpty()) {
-                Path base = Paths.get(lastRunDir).toAbsolutePath().normalize();
-                if (!p.startsWith(base)) {
-                    return null;
-                }
+            Path outputRoot = resolveCrawlerDir().resolve("output").toAbsolutePath().normalize();
+            if (!p.startsWith(outputRoot)) {
+                return null;
             }
             File f = p.toFile();
             return f.exists() ? f : null;
@@ -287,6 +358,117 @@ public class PipelineServiceImpl implements PipelineService {
         lastArtifacts = artifacts;
         lastErrors = readErrors(payload);
         lastSummary = buildSummary(artifacts, lastErrors);
+    }
+
+    private void runStats() throws Exception {
+        Path crawlerDir = resolveCrawlerDir();
+        Path scriptPath = crawlerDir.resolve("nlp_job_pipeline.py").toAbsolutePath().normalize();
+        File scriptFile = scriptPath.toFile();
+        if (!scriptFile.exists()) {
+            throw new RuntimeException("Pipeline 脚本不存在: " + scriptPath);
+        }
+
+        String python = resolvePythonExecutable(crawlerDir);
+        addLog("Python: " + python);
+        ensurePythonModulesInstalled(crawlerDir, python, Arrays.asList("pymysql", "pandas", "jieba"));
+
+        ProcessBuilder pb = new ProcessBuilder(
+                python,
+                "-u",
+                scriptPath.toString(),
+                "stats"
+        );
+        pb.directory(crawlerDir.toFile());
+        pb.redirectErrorStream(true);
+
+        Process process = pb.start();
+        currentProcess = process;
+
+        String pipelineJsonLine = null;
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "GBK"));
+        String line;
+        while ((line = reader.readLine()) != null) {
+            addLog(line);
+            if (line.startsWith(PIPELINE_MARKER)) {
+                pipelineJsonLine = line.substring(PIPELINE_MARKER.length());
+            }
+        }
+
+        int exitCode = process.waitFor();
+        lastExitCode = exitCode;
+        addLog("进程退出码: " + exitCode);
+        if (exitCode != 0) {
+            throw new RuntimeException("Stats 执行失败，退出码: " + exitCode);
+        }
+
+        if (pipelineJsonLine == null || pipelineJsonLine.trim().isEmpty()) {
+            throw new RuntimeException("Stats 未输出结果 JSON");
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = mapper.readValue(pipelineJsonLine, Map.class);
+
+        Object runDir = payload.get("run_dir");
+        if (runDir != null) {
+            lastRunDir = String.valueOf(runDir);
+        }
+
+        Map<String, String> artifactsDelta = new LinkedHashMap<>();
+        Object artifactsObj = payload.get("artifacts");
+        if (artifactsObj instanceof Map) {
+            Map<?, ?> m = (Map<?, ?>) artifactsObj;
+            for (Map.Entry<?, ?> e : m.entrySet()) {
+                String k = String.valueOf(e.getKey());
+                Object v = e.getValue();
+                if (k != null && v != null) {
+                    artifactsDelta.put(k, String.valueOf(v));
+                }
+            }
+        }
+
+        Map<String, String> merged = new LinkedHashMap<>();
+        if (lastArtifacts != null) {
+            merged.putAll(lastArtifacts);
+        }
+        merged.putAll(artifactsDelta);
+        lastArtifacts = merged;
+
+        lastErrors = readErrors(payload);
+        lastSummary = buildSummary(lastArtifacts, lastErrors);
+    }
+
+    private void ensurePythonModulesInstalled(Path workDir, String python, List<String> modules) throws Exception {
+        if (modules == null || modules.isEmpty()) {
+            return;
+        }
+        List<String> missing = new ArrayList<>();
+        for (String m : modules) {
+            if (m == null || m.trim().isEmpty()) {
+                continue;
+            }
+            if (!checkPythonModule(python, workDir, m.trim())) {
+                missing.add(m.trim());
+            }
+        }
+        if (missing.isEmpty()) {
+            return;
+        }
+        ensurePipAvailable(workDir, python);
+        int exitCode = runPipInstall(workDir, python, missing);
+        if (exitCode != 0) {
+            throw new RuntimeException("依赖安装失败（" + String.join(",", missing) + "），退出码: " + exitCode);
+        }
+    }
+
+    private boolean artifactExists(String path) {
+        if (path == null || path.trim().isEmpty()) {
+            return false;
+        }
+        try {
+            return Paths.get(path).toAbsolutePath().normalize().toFile().exists();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private Map<String, Object> safeGetFingerprint() {

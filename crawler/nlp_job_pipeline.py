@@ -1,3 +1,20 @@
+"""招聘数据 NLP 处理流水线。
+
+功能概览：
+- 从 MySQL 读取 job_info / job_info_51job
+- 文本清洗与分词（支持停用词、技能白名单、核心特征 text_core）
+- 导出清洗数据、统计报表（Top Tokens）、TF-IDF 特征、聚类可视化
+- 可选：训练薪资分档模型（MLP / TextCNN）
+
+运行方式：python crawler/nlp_job_pipeline.py <cmd>
+- preprocess / export-clean / export-features / stats / cluster / train-mlp / train-textcnn / viz / dashboard
+
+输出位置：
+- --output-dir 默认 crawler/output/run_时间戳/
+- --raw-dir 默认 crawler/data/raw/
+- --text-features-dir 默认 crawler/data/text_features/
+"""
+
 import argparse
 import json
 import os
@@ -88,6 +105,14 @@ def read_jobs_from_mysql(
     tables: Sequence[str] = ("job_info", "job_info_51job"),
     limit: Optional[int] = None,
 ) -> pd.DataFrame:
+    """从 MySQL 读取招聘数据。
+
+    - tables: 需要读取的表名列表（默认 boss=job_info + 51job=job_info_51job）
+    - limit: 仅用于调试/抽样
+
+    返回 DataFrame，并额外写入一列 source_table 标记数据来源表。
+    """
+
     frames = []
     conn = connect_mysql(cfg)
     try:
@@ -135,6 +160,15 @@ def export_cleaned_to_raw_dir(
     whitelist_path: Optional[str],
     limit: Optional[int] = None,
 ) -> Dict[str, str]:
+    """导出按来源拆分的清洗数据（覆盖写入 raw_dir）。
+
+    会为每张来源表生成两份文件：
+    - *_clean.csv：基础字段清洗后的结果
+    - *_clean_nlp.csv：在 clean 基础上附加 text_raw/tokens/text/tokens_core/text_core 等 NLP 字段
+
+    返回值是一个 {key: path} 的映射，便于上层汇总到 artifacts。
+    """
+
     os.makedirs(raw_dir, exist_ok=True)
 
     paths: Dict[str, str] = {}
@@ -155,6 +189,8 @@ def export_cleaned_to_raw_dir(
             nlp_df["tokens"] = nlp_df["tokens"].map(lambda xs: " ".join(xs) if isinstance(xs, list) else str(xs or ""))
         if "tokens_skill" in nlp_df.columns:
             nlp_df["tokens_skill"] = nlp_df["tokens_skill"].map(lambda xs: " ".join(xs) if isinstance(xs, list) else str(xs or ""))
+        if "tokens_core" in nlp_df.columns:
+            nlp_df["tokens_core"] = nlp_df["tokens_core"].map(lambda xs: " ".join(xs) if isinstance(xs, list) else str(xs or ""))
         nlp_df.to_csv(p_nlp, index=False, encoding="utf-8-sig")
 
         paths[f"{base}_clean"] = p_clean
@@ -297,15 +333,124 @@ def clean_jobs_df(df: pd.DataFrame) -> pd.DataFrame:
 _html_re = re.compile(r"<[^>]+>")
 _space_re = re.compile(r"\s+")
 _keep_re = re.compile(r"[^0-9A-Za-z\u4e00-\u9fff\+\#\.\-_/ ]+")
+_ascii_token_re = re.compile(r"[A-Za-z][A-Za-z0-9\+\#\.\-_/]{1,}")
+_num_token_re = re.compile(r"^\d+(?:\.\d+)?$")
 
 
 def normalize_text(text: str) -> str:
     s = str(text or "")
     s = _html_re.sub(" ", s)
     s = s.replace("\u00a0", " ")
+
+    s = s.replace("&nbsp;", " ")
+    s = s.replace("&amp;", " ")
+    s = s.replace("&lt;", " ")
+    s = s.replace("&gt;", " ")
+    s = s.replace("&quot;", " ")
+    s = s.replace("&apos;", " ")
+
+    s = re.sub(r"(?i)asp\.net", "aspnet", s)
+    s = re.sub(r"(?i)\.net", "dotnet", s)
+
     s = _keep_re.sub(" ", s)
     s = _space_re.sub(" ", s).strip()
     return s
+
+
+def _merge_phrases(tokens: List[str]) -> List[str]:
+    if not tokens:
+        return []
+    out: List[str] = []
+    i = 0
+    while i < len(tokens):
+        t1 = tokens[i]
+        t2 = tokens[i + 1] if i + 1 < len(tokens) else ""
+        t3 = tokens[i + 2] if i + 2 < len(tokens) else ""
+        if t1 == "机器" and t2 == "学习":
+            out.append("机器学习")
+            i += 2
+            continue
+        if t1 == "深度" and t2 == "学习":
+            out.append("深度学习")
+            i += 2
+            continue
+        if t1 == "自然" and t2 == "语言" and t3 == "处理":
+            out.append("自然语言处理")
+            i += 3
+            continue
+        if t1 == "计算机" and t2 == "视觉":
+            out.append("计算机视觉")
+            i += 2
+            continue
+        if t1 == "大" and t2 == "数据":
+            out.append("大数据")
+            i += 2
+            continue
+        if t1 == "数据" and t2 in {"分析", "挖掘", "仓库", "治理", "开发", "处理", "科学"}:
+            out.append("数据" + t2)
+            i += 2
+            continue
+        out.append(t1)
+        i += 1
+    return out
+
+
+def _is_core_token(t: str) -> bool:
+    if not t:
+        return False
+    if _num_token_re.match(t):
+        return False
+    if t in {
+        "开发",
+        "技术",
+        "熟悉",
+        "具备",
+        "系统",
+        "设计",
+        "项目",
+        "优化",
+        "团队",
+        "数据",
+    }:
+        return False
+
+    if _ascii_token_re.fullmatch(t):
+        return True
+
+    if any(ch in t for ch in ("+", "#", ".", "/", "_", "-")):
+        return True
+
+    if t.endswith(("框架", "平台", "协议", "数据库", "中间件", "算法", "模型", "工程", "架构", "集群", "服务")):
+        return True
+
+    if t in {
+        "大数据",
+        "数据分析",
+        "数据挖掘",
+        "数据仓库",
+        "数据治理",
+        "数据开发",
+        "机器学习",
+        "深度学习",
+        "自然语言处理",
+        "计算机视觉",
+        "推荐系统",
+        "知识图谱",
+        "云原生",
+        "微服务",
+        "分布式",
+        "高并发",
+        "高可用",
+        "容器",
+        "爬虫",
+        "可视化",
+    }:
+        return True
+
+    if re.fullmatch(r"[\u4e00-\u9fff]{2,6}", t):
+        return True
+
+    return False
 
 
 def build_stopwords(removed_terms: Iterable[str]) -> set:
@@ -339,17 +484,185 @@ def build_stopwords(removed_terms: Iterable[str]) -> set:
         "以及",
         "等",
         "相关",
-        "负责",
         "岗位",
+        "职位",
         "工作",
+        "职责",
+        "职能",
         "要求",
         "能力",
         "经验",
         "以上",
+        "以下",
         "优先",
+        "负责",
+        "参与",
+        "协助",
+        "配合",
+        "完成",
+        "实现",
+        "推进",
+        "推动",
+        "落地",
+        "支持",
+        "跟进",
+        "对接",
+        "沟通",
+        "协调",
+        "优化",
+        "迭代",
+        "维护",
+        "开发",
+        "设计",
+        "系统",
+        "项目",
+        "团队",
+        "技术",
+        "熟悉",
+        "掌握",
+        "精通",
+        "了解",
+        "具备",
+        "良好",
+        "优秀",
+        "较强",
+        "一定",
+        "能够",
+        "可以",
+        "需要",
+        "必须",
+        "进行",
+        "包括",
+        "并",
+        "及",
+        "及其",
+        "等同",
+        "以上学历",
+        "本科",
+        "大专",
+        "硕士",
+        "博士",
+        "应届",
+        "毕业",
+        "公司",
+        "部门",
+        "业务",
+        "产品",
+        "客户",
+        "需求",
+        "文档",
+        "方案",
+        "工具",
+        "方法",
+        "流程",
+        "规范",
+        "标准",
+        "能力强",
+        "经验丰富",
+        "工程师",
+        "and",
+        "or",
+        "to",
+        "in",
+        "with",
+        "the",
+        "of",
+        "for",
+        "on",
+        "at",
+        "by",
+        "from",
+        "as",
+        "a",
+        "an",
+        "is",
+        "are",
+        "be",
+        "been",
+        "being",
+        "this",
+        "that",
+        "these",
+        "those",
+        "it",
+        "its",
+        "we",
+        "our",
+        "us",
+        "you",
+        "your",
+        "they",
+        "their",
+        "them",
+        "can",
+        "may",
+        "will",
+        "shall",
+        "must",
+        "should",
+        "could",
+        "would",
+        "etc",
+        "nbsp",
+        "amp",
+        "lt",
+        "gt",
+        "quot",
+        "apos",
+        "net",
+        "代码",
+        "分析",
+        "挖掘",
+        "仓库",
+        "治理",
+        "开发",
+        "处理",
+        "科学",
+        "专业",
+        "使用",
+        "问题",
+        "框架",
+        "任职",
+        "应用",
+        "编写",
+        "管理",
+        "性能",
+        "平台",
+        "协作",
+        "模型",
+        "工程",
+        "架构",
+        "集群",
+        "服务",
+        "熟练",
+        "独立",
+        "解决",
+        "岗位职责",
+        "提升",
+        "确保",
+        "基础",
+        "核心",
+        "软件",
+        "学习",
+        "熟练掌握",
+        "功能",
+        "研发",
+        "具有",
+        "用户",
+        "接口",
+        "模块",
+        "理解",
+        "主流",
+        "部署",
+        "编程",
+        "持续",
+        "语言",
+        "场景",
+        "计算机"
+
     }
     for t in removed_terms or []:
-        if t and len(t) <= 6:
+        if t and len(t) <= 12:
             base.add(str(t).strip().lower())
     return base
 
@@ -360,10 +673,21 @@ def tokenize(
     whitelist: Optional[set] = None,
     min_len: int = 2,
 ) -> List[str]:
+    """分词与过滤。
+
+    规则：
+    - 先提取英文/符号 token（如 python、c++、k8s、dotnet），再走 jieba 分词
+    - 过滤纯数字、长度过短、停用词
+    - whitelist 不为 None 时，仅保留白名单内 token（用于技能口径）
+
+    返回 token 列表（会进行少量短语合并，如 “机器 学习”→“机器学习”）。
+    """
+
     s = normalize_text(text)
-    tokens = []
-    for w in jieba.lcut(s):
-        t = str(w or "").strip().lower()
+    tokens: List[str] = []
+
+    for m in _ascii_token_re.findall(s):
+        t = str(m or "").strip().lower()
         if not t:
             continue
         if len(t) < int(min_len):
@@ -373,7 +697,22 @@ def tokenize(
         if whitelist is not None and t not in whitelist:
             continue
         tokens.append(t)
-    return tokens
+
+    for w in jieba.lcut(s):
+        t = str(w or "").strip().lower()
+        if not t:
+            continue
+        if len(t) < int(min_len):
+            continue
+        if _num_token_re.match(t):
+            continue
+        if t in stopwords:
+            continue
+        if whitelist is not None and t not in whitelist:
+            continue
+        tokens.append(t)
+
+    return _merge_phrases(tokens)
 
 
 def attach_tokens(
@@ -382,6 +721,17 @@ def attach_tokens(
     whitelist_path: Optional[str] = None,
     text_cols: Sequence[str] = ("job_name", "job_keywords", "job_desc"),
 ) -> pd.DataFrame:
+    """为岗位数据附加文本字段与分词结果。
+
+    生成字段：
+    - text_raw：把 text_cols 拼接为原始文本
+    - tokens/text：停用词过滤后的通用分词与空格拼接文本
+    - tokens_skill/text_skill：若 whitelist 存在，按“技能白名单”过滤后的口径
+    - tokens_core/text_core：用于“核心语义特征(Top Tokens)”的默认口径
+      - 若 whitelist 存在：tokens_core = tokens_skill
+      - 否则：对 tokens 做一次规则筛选（保留更像技能/领域词的 token）
+    """
+
     removed_terms = load_removed_terms(removed_terms_path)
     stopwords = build_stopwords(removed_terms)
     whitelist = None
@@ -401,9 +751,15 @@ def attach_tokens(
     out["text_raw"] = out.apply(join_text, axis=1)
     out["tokens"] = out["text_raw"].map(lambda s: tokenize(s, stopwords=stopwords, whitelist=None))
     out["text"] = out["tokens"].map(lambda xs: " ".join(xs))
+
     if whitelist is not None:
         out["tokens_skill"] = out["text_raw"].map(lambda s: tokenize(s, stopwords=stopwords, whitelist=whitelist))
         out["text_skill"] = out["tokens_skill"].map(lambda xs: " ".join(xs))
+        out["tokens_core"] = out["tokens_skill"]
+    else:
+        out["tokens_core"] = out["tokens"].map(lambda xs: [t for t in (xs or []) if _is_core_token(str(t or "").strip().lower())])
+
+    out["text_core"] = out["tokens_core"].map(lambda xs: " ".join(xs))
     return out
 
 
@@ -433,6 +789,7 @@ def reduce_dataframe(df: pd.DataFrame) -> pd.DataFrame:
             "created_at",
             "text",
             "text_skill",
+            "text_core",
         ]
         if c in out.columns
     ]
@@ -444,6 +801,17 @@ def reduce_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def export_stats(df: pd.DataFrame, out_dir: str) -> Dict[str, str]:
+    """导出统计类产物（主要用于前端图表/Top Tokens）。
+
+    输出文件示例：
+    - salary_by_city.csv：按城市统计薪资
+    - value_counts_*.csv：若干字段的频次统计
+    - token_count_desc.csv：每条文本 token 数描述统计
+    - top_tokens.csv：核心语义特征词频 Top200
+
+    Top Tokens 使用口径优先级：text_core > text_skill > text。
+    """
+
     os.makedirs(out_dir, exist_ok=True)
     paths = {}
 
@@ -466,7 +834,7 @@ def export_stats(df: pd.DataFrame, out_dir: str) -> Dict[str, str]:
         vc.to_csv(p, index=False, encoding="utf-8-sig")
         paths[f"value_counts_{col}"] = p
 
-    text_col = "text_skill" if "text_skill" in df.columns else "text"
+    text_col = "text_core" if "text_core" in df.columns else ("text_skill" if "text_skill" in df.columns else "text")
     if text_col in df.columns:
         token_counts = df[text_col].astype(str).str.split().map(len)
         token_desc = token_counts.describe().to_frame(name="token_count")
@@ -1087,6 +1455,19 @@ def visualize_basic(df: pd.DataFrame, out_dir: str) -> Dict[str, str]:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
+    """命令行参数。
+
+    cmd 说明：
+    - preprocess：只做读库/清洗/分词/导出 jobs_clean/jobs_reduced
+    - export-clean：同 preprocess，并额外覆盖写 raw_dir 的 *_clean/_clean_nlp
+    - export-features：导出 TF-IDF 稀疏矩阵与词表（boss/51job/all）
+    - stats：导出统计报表（包含 Top Tokens）
+    - cluster：TF-IDF + 降维 + KMeans 聚类，并输出散点图
+    - train-mlp / train-textcnn：训练薪资分档模型（依赖 torch）
+    - viz：输出基础可视化图片
+    - dashboard：一次性跑 stats/cluster/viz/train-mlp/train-textcnn
+    """
+
     p = argparse.ArgumentParser(prog="nlp_job_pipeline.py")
     p.add_argument("--db-host", default=os.environ.get("JOBDATA_DB_HOST", "localhost"))
     p.add_argument("--db-port", type=int, default=int(os.environ.get("JOBDATA_DB_PORT", "3306")))
