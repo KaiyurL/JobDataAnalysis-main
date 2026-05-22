@@ -92,7 +92,7 @@ export default {
   },
 
   matchJobs(data) {
-    return api.post('/jobs/match/jobs', data)
+    return api.post('/jobs/match/jobs', data, { timeout: 60000 })
   },
 
   getAllSkills() {

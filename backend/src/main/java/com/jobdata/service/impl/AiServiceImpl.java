@@ -12,6 +12,11 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 
 @Service
@@ -133,6 +138,12 @@ public class AiServiceImpl implements AiService {
             sb.append("\n\n【用户当前画像】\n").append(p);
         }
 
+        List<String> topTokens = loadLatestTopTokens();
+        if (topTokens != null && !topTokens.isEmpty()) {
+            sb.append("\n\n【市场核心技能（来自离线NLP流水线统计）】\n");
+            sb.append(String.join("、", topTokens));
+        }
+
         sb.append("\n\n请根据用户的具体提问，灵活提供以下部分或全部内容：\n");
         sb.append("1. **岗位匹配与差距分析**：对比用户的技能/经验与目标岗位的核心要求，指出匹配点和缺失点。\n");
         sb.append("2. **简历优化建议**：针对目标岗位，提供可以直接写到简历上的亮点描述（bullet points）。\n");
@@ -140,6 +151,86 @@ public class AiServiceImpl implements AiService {
         sb.append("4. **投递与学习计划**：制定清晰的短期（如30天）技能提升和投递行动计划。\n");
         
         return sb.toString();
+    }
+
+    private List<String> loadLatestTopTokens() {
+        try {
+            Path crawlerDir = resolveCrawlerDir();
+            Path cache = crawlerDir.resolve("output").resolve("pipeline_cache.json").toAbsolutePath().normalize();
+            if (!cache.toFile().exists()) {
+                return null;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> payload = objectMapper.readValue(cache.toFile(), Map.class);
+            Object artifactsObj = payload.get("artifacts");
+            if (!(artifactsObj instanceof Map)) {
+                return null;
+            }
+            Map<?, ?> artifacts = (Map<?, ?>) artifactsObj;
+            Object p = artifacts.get("top_tokens");
+            if (p == null) {
+                return null;
+            }
+            Path csv = Paths.get(String.valueOf(p)).toAbsolutePath().normalize();
+            if (!csv.toFile().exists()) {
+                return null;
+            }
+            List<String> lines = tryReadAllLines(csv, StandardCharsets.UTF_8, Charset.forName("GBK"));
+            if (lines == null || lines.size() < 2) {
+                return null;
+            }
+            List<String> out = new ArrayList<>();
+            for (int i = 1; i < Math.min(lines.size(), 16); i++) {
+                String line = lines.get(i);
+                if (line == null || line.trim().isEmpty()) {
+                    continue;
+                }
+                String[] parts = line.split(",");
+                if (parts.length < 2) {
+                    continue;
+                }
+                String token = parts[0] == null ? "" : parts[0].trim();
+                if (!token.isEmpty()) {
+                    out.add(token);
+                }
+            }
+            return out;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Path resolveCrawlerDir() {
+        Path current = Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
+        List<Path> candidates = Arrays.asList(
+                current.resolve("crawler"),
+                current.resolve("..").resolve("crawler"),
+                current.resolve("..").resolve("..").resolve("crawler")
+        );
+        for (Path candidate : candidates) {
+            Path script = candidate.resolve("nlp_job_pipeline.py");
+            if (script.toFile().exists()) {
+                return candidate.toAbsolutePath().normalize();
+            }
+        }
+        return candidates.get(0).toAbsolutePath().normalize();
+    }
+
+    private List<String> tryReadAllLines(Path p, Charset... charsets) {
+        if (charsets == null || charsets.length == 0) {
+            try {
+                return Files.readAllLines(p, StandardCharsets.UTF_8);
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        for (Charset cs : charsets) {
+            try {
+                return Files.readAllLines(p, cs);
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
     }
 
     private String renderProfile(Map<String, Object> profile) {

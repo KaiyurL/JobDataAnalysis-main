@@ -2,7 +2,7 @@
   <div class="job-match">
     <div class="page-header">
       <h1>🤖 智能求职助手</h1>
-      <p>基于阿里云百炼大模型，为你生成定制化求职建议（支持上传简历智能解析，并自动推荐匹配岗位）</p>
+      <p>基于阿里云百炼大模型，为你生成定制化求职建议（支持上传简历智能解析与岗位匹配建议）</p>
     </div>
 
     <el-row :gutter="16">
@@ -70,9 +70,54 @@
               />
             </el-form-item>
           </el-form>
+
+          <div v-if="resumeMeta" class="resume-meta-row">
+            <el-tag size="small" type="success" effect="plain">已解析：{{ resumeMeta.fileType?.toUpperCase?.() || resumeMeta.fileType }}</el-tag>
+            <el-tag v-if="resumeMeta.textLength != null" size="small" type="info" effect="plain">文本 {{ resumeMeta.textLength }} 字</el-tag>
+          </div>
+
+          <el-collapse v-if="resumeMeta && resumeMeta.rich" class="resume-collapse" accordion>
+            <el-collapse-item title="简历内容预览（节选）" name="preview">
+              <div class="resume-preview">{{ resumeMeta.textPreview }}</div>
+            </el-collapse-item>
+            <el-collapse-item v-if="profileExtra.highlights?.length" title="结构化亮点" name="highlights">
+              <div class="resume-list">
+                <div v-for="(x, i) in profileExtra.highlights" :key="i" class="resume-list-item">• {{ x }}</div>
+              </div>
+            </el-collapse-item>
+            <el-collapse-item v-if="profileExtra.projects?.length" title="项目经历" name="projects">
+              <div class="resume-cards">
+                <el-card v-for="(p, i) in profileExtra.projects" :key="i" class="resume-mini-card" shadow="never">
+                  <div class="resume-mini-title">{{ p.name || '项目' }}<span v-if="p.role"> · {{ p.role }}</span></div>
+                  <div v-if="p.tech?.length" class="resume-mini-tags">
+                    <el-tag v-for="t in p.tech" :key="t" size="small" type="info" effect="plain">{{ t }}</el-tag>
+                  </div>
+                  <div v-if="p.highlights?.length" class="resume-mini-text">
+                    <div v-for="(h, j) in p.highlights" :key="j">• {{ h }}</div>
+                  </div>
+                </el-card>
+              </div>
+            </el-collapse-item>
+            <el-collapse-item v-if="profileExtra.workExperiences?.length" title="工作经历" name="work">
+              <div class="resume-cards">
+                <el-card v-for="(w, i) in profileExtra.workExperiences" :key="i" class="resume-mini-card" shadow="never">
+                  <div class="resume-mini-title">
+                    {{ w.company || '公司' }}<span v-if="w.title"> · {{ w.title }}</span>
+                  </div>
+                  <div v-if="w.start || w.end" class="resume-mini-sub">{{ w.start || '' }} - {{ w.end || '' }}</div>
+                  <div v-if="w.tech?.length" class="resume-mini-tags">
+                    <el-tag v-for="t in w.tech" :key="t" size="small" type="info" effect="plain">{{ t }}</el-tag>
+                  </div>
+                  <div v-if="w.highlights?.length" class="resume-mini-text">
+                    <div v-for="(h, j) in w.highlights" :key="j">• {{ h }}</div>
+                  </div>
+                </el-card>
+              </div>
+            </el-collapse-item>
+          </el-collapse>
           
           <div style="margin-top: 10px;">
-            <el-button type="success" plain size="small" style="width: 100%;" @click="fetchMatchedJobs" :loading="matchingJobs">
+            <el-button type="success" plain size="small" style="width: 100%;" @click="handleMatchJobs" :loading="matchingJobs">
               <el-icon style="margin-right: 4px;"><Search /></el-icon> 匹配岗位
             </el-button>
           </div>
@@ -85,8 +130,8 @@
         </el-card>
       </el-col>
 
-      <!-- 中间：对话 -->
-      <el-col :xs="24" :sm="24" :md="10" :lg="11">
+      <!-- 右侧：对话（包含推荐结果） -->
+      <el-col :xs="24" :sm="24" :md="17" :lg="18">
         <el-card class="chat-card" shadow="hover">
           <template #header>
             <div class="card-header">
@@ -99,9 +144,39 @@
 
           <div ref="chatBodyRef" class="chat-body">
             <div v-for="m in messages" :key="m.id" class="chat-line" :class="m.role">
-              <div class="chat-bubble">
+              <div class="chat-bubble" :class="{ 'job-cards-bubble': m.kind === 'job_cards' }">
                 <div class="chat-role">{{ m.role === 'user' ? '我' : 'AI 顾问' }}</div>
-                <div class="chat-content" v-html="formatContent(m.content)"></div>
+                <div v-if="m.kind === 'job_cards'" class="job-cards">
+                  <div class="job-cards-header">{{ m.title || '推荐岗位（可点开查看详情）' }}</div>
+                  <el-row :gutter="12">
+                    <el-col v-for="c in m.cards" :key="c.key" :xs="24" :sm="12" :md="12" :lg="8">
+                      <el-card class="job-card" shadow="hover" :body-style="{ padding: '14px' }" @click="openJobDetail(c)">
+                        <div class="job-card-head">
+                          <div class="job-card-title">{{ c.job.jobName }}</div>
+                          <div class="job-card-salary-pill" v-if="c.job.salaryMin != null && c.job.salaryMax != null">
+                            {{ c.job.salaryMin }}K-{{ c.job.salaryMax }}K
+                          </div>
+                          <div class="job-card-salary-pill muted" v-else>面议</div>
+                        </div>
+                        <div class="job-card-sub">{{ c.job.companyName }} · {{ c.job.city }}</div>
+                        <div class="job-card-tags">
+                          <el-tag size="small" type="info" effect="plain">{{ c.job.experience || '经验不限' }}</el-tag>
+                          <el-tag size="small" type="info" effect="plain">{{ c.job.education || '学历不限' }}</el-tag>
+                          <el-tag size="small" :type="sourceTagType(c.sourceTable)" effect="plain">{{ sourceLabel(c.sourceTable) }}</el-tag>
+                        </div>
+                        <div class="job-card-score" v-if="c.matchScore != null">
+                          <el-progress :percentage="Number(c.matchScore) || 0" :stroke-width="8" :show-text="false" :color="scoreColor(Number(c.matchScore) || 0)" />
+                          <div class="job-card-score-text">{{ Math.round((Number(c.matchScore) || 0) * 10) / 10 }}% 匹配</div>
+                        </div>
+                        <div class="job-card-reason" v-if="c.aiReason">{{ c.aiReason }}</div>
+                        <div class="job-card-actions">
+                          <el-button type="primary" size="small" @click.stop="openJobDetail(c)">详情 <el-icon><View /></el-icon></el-button>
+                        </div>
+                      </el-card>
+                    </el-col>
+                  </el-row>
+                </div>
+                <div v-else class="chat-content" v-html="formatContent(m.content)"></div>
               </div>
             </div>
           </div>
@@ -124,100 +199,50 @@
         </el-card>
       </el-col>
 
-      <!-- 右侧：匹配岗位推荐 -->
-      <el-col :xs="24" :sm="24" :md="7" :lg="7">
-        <el-card class="match-card" shadow="hover">
-          <template #header>
-            <div class="card-header">
-              <span>🎯 推荐岗位</span>
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <el-button size="small" @click="refreshMatches" :disabled="matchingJobs || !profile.targetRole" title="刷一刷">
-                  <el-icon><Refresh /></el-icon>
-                </el-button>
-                <el-tag size="small" type="success" v-if="matchPool.length">{{ shownJobs.length }} 个</el-tag>
-              </div>
-            </div>
-          </template>
-
-          <div class="match-list" v-loading="matchingJobs">
-            <div v-if="!matchPool.length && !matchingJobs" class="empty-match">
-              <el-empty description="完善左侧画像后，点击「匹配岗位」获取精准推荐" :image-size="80" />
-            </div>
-            
-            <div v-for="(match, idx) in shownJobs" :key="idx" class="match-item">
-              <div class="match-header">
-                <span class="match-title">{{ match.job.jobName }}</span>
-                <span class="match-salary">{{ match.job.salaryMin }}K - {{ match.job.salaryMax }}K</span>
-              </div>
-              <div class="match-company">{{ match.job.companyName }}</div>
-              <div class="match-tags">
-                <el-tag size="small" type="info">{{ match.job.city }}</el-tag>
-                <el-tag size="small" type="info">{{ match.job.experience }}</el-tag>
-                <el-tag size="small" type="info">{{ match.job.education }}</el-tag>
-                <el-tag size="small" :type="sourceTagType(match.sourceTable)" effect="plain">{{ sourceLabel(match.sourceTable) }}</el-tag>
-              </div>
-              <div class="match-score-row">
-                <el-progress :percentage="match.matchScore" :stroke-width="8" :show-text="false" :color="scoreColor(match.matchScore)" />
-                <span class="score-text">{{ match.matchScore }}% 匹配</span>
-              </div>
-              <div class="match-reason">{{ match.matchReason }}</div>
-              <div class="match-actions">
-                <el-button type="primary" size="small" @click="openJobDetail(match)">
-                  详情 <el-icon><View /></el-icon>
-                </el-button>
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
     </el-row>
 
     <el-dialog v-model="jobDetailVisible" width="860px" :show-close="true" top="8vh">
       <template #header>
         <div class="job-detail-title">
-          <div class="job-detail-name">{{ selectedMatch?.job?.jobName || '岗位详情' }}</div>
+          <div class="job-detail-name">{{ selectedJob?.job?.jobName || '岗位详情' }}</div>
           <div class="job-detail-sub">
-            {{ selectedMatch?.job?.companyName || '' }}
-            <span v-if="selectedMatch?.job?.city"> · {{ selectedMatch.job.city }}</span>
+            {{ selectedJob?.job?.companyName || '' }}
+            <span v-if="selectedJob?.job?.city"> · {{ selectedJob.job.city }}</span>
+            <span v-if="selectedJob?.sourceTable"> · {{ sourceLabel(selectedJob.sourceTable) }}</span>
           </div>
         </div>
       </template>
 
-      <div class="job-detail-body" v-if="selectedMatch?.job">
+      <div class="job-detail-body" v-if="selectedJob?.job">
         <div class="job-detail-meta">
           <el-descriptions :column="2" border>
             <el-descriptions-item label="薪资">
-              {{ selectedMatch.job.salaryMin }}K - {{ selectedMatch.job.salaryMax }}K
+              <span v-if="selectedJob.job.salaryMin != null && selectedJob.job.salaryMax != null">{{ selectedJob.job.salaryMin }}K - {{ selectedJob.job.salaryMax }}K</span>
+              <span v-else>面议</span>
             </el-descriptions-item>
             <el-descriptions-item label="经验 / 学历">
-              {{ selectedMatch.job.experience || '不限' }} / {{ selectedMatch.job.education || '不限' }}
+              {{ selectedJob.job.experience || '不限' }} / {{ selectedJob.job.education || '不限' }}
             </el-descriptions-item>
             <el-descriptions-item label="行业">
-              {{ selectedMatch.job.companyIndustry || '—' }}
+              {{ selectedJob.job.companyIndustry || '—' }}
             </el-descriptions-item>
             <el-descriptions-item label="公司规模">
-              {{ selectedMatch.job.companySize || '—' }}
+              {{ selectedJob.job.companySize || '—' }}
             </el-descriptions-item>
             <el-descriptions-item label="发布时间">
-              {{ selectedMatch.job.publishDate || '—' }}
+              {{ selectedJob.job.publishDate || '—' }}
             </el-descriptions-item>
-            <el-descriptions-item label="来源">
-              {{ sourceLabel(selectedMatch.sourceTable) }}
-            </el-descriptions-item>
-            <el-descriptions-item label="匹配度">
-              <div class="job-detail-score">
-                <el-progress :percentage="selectedMatch.matchScore" :stroke-width="8" :show-text="false" :color="scoreColor(selectedMatch.matchScore)" />
-                <span class="score-text">{{ selectedMatch.matchScore }}% 匹配</span>
-              </div>
+            <el-descriptions-item label="推荐理由">
+              {{ selectedJob.aiReason || '—' }}
             </el-descriptions-item>
           </el-descriptions>
         </div>
 
-        <div class="job-detail-section" v-if="selectedMatch.job.jobKeywords">
+        <div class="job-detail-section" v-if="selectedJob.job.jobKeywords">
           <div class="job-detail-section-title">技能关键词</div>
           <div class="job-detail-tags">
             <el-tag
-              v-for="kw in splitKeywords(selectedMatch.job.jobKeywords)"
+              v-for="kw in splitKeywords(selectedJob.job.jobKeywords)"
               :key="kw"
               size="small"
               type="info"
@@ -228,24 +253,24 @@
           </div>
         </div>
 
-        <div class="job-detail-section" v-if="selectedMatch.job.companyWelfare">
+        <div class="job-detail-section" v-if="selectedJob.job.companyWelfare">
           <div class="job-detail-section-title">福利待遇</div>
-          <div class="job-detail-text">{{ selectedMatch.job.companyWelfare }}</div>
+          <div class="job-detail-text">{{ selectedJob.job.companyWelfare }}</div>
         </div>
 
-        <div class="job-detail-section" v-if="selectedMatch.job.jobDesc">
+        <div class="job-detail-section" v-if="selectedJob.job.jobDesc">
           <div class="job-detail-section-title">岗位描述</div>
-          <div class="job-detail-desc">{{ selectedMatch.job.jobDesc }}</div>
+          <div class="job-detail-desc">{{ selectedJob.job.jobDesc }}</div>
         </div>
 
         <div class="job-detail-section">
           <div class="job-detail-section-title">招聘链接</div>
           <div class="job-detail-url-row">
-            <el-input :model-value="normalizeJobUrl(selectedMatch.job.jobUrl)" readonly />
-            <el-button @click="copyJobUrl(selectedMatch.job.jobUrl)" :disabled="!normalizeJobUrl(selectedMatch.job.jobUrl) || normalizeJobUrl(selectedMatch.job.jobUrl) === '#'" title="复制链接">
+            <el-input :model-value="normalizeJobUrl(selectedJob.job.jobUrl)" readonly />
+            <el-button @click="copyJobUrl(selectedJob.job.jobUrl)" :disabled="!canOpenUrl(selectedJob.job.jobUrl)" title="复制链接">
               <el-icon><CopyDocument /></el-icon>
             </el-button>
-            <el-button type="primary" plain @click="openJobUrl(selectedMatch.job.jobUrl)" :disabled="!normalizeJobUrl(selectedMatch.job.jobUrl) || normalizeJobUrl(selectedMatch.job.jobUrl) === '#'" title="新窗口打开">
+            <el-button type="primary" plain @click="openJobUrl(selectedJob.job.jobUrl)" :disabled="!canOpenUrl(selectedJob.job.jobUrl)" title="新窗口打开">
               <el-icon><TopRight /></el-icon>
             </el-button>
           </div>
@@ -259,7 +284,7 @@
 import { ref, nextTick } from 'vue'
 import api from '../api.js'
 import { ElMessage } from 'element-plus'
-import { Upload, RefreshLeft, Refresh, Search, TopRight, View, CopyDocument } from '@element-plus/icons-vue'
+import { Upload, RefreshLeft, Search, View, CopyDocument, TopRight } from '@element-plus/icons-vue'
 
 const profile = ref({
   targetRole: '',
@@ -269,11 +294,20 @@ const profile = ref({
   skills: '',
   notes: ''
 })
+const resumeMeta = ref(null)
+const profileExtra = ref({
+  highlights: [],
+  workExperiences: [],
+  projects: [],
+  certifications: [],
+  links: []
+})
 
 const messages = ref([
   {
     id: `m_${Date.now()}`,
     role: 'assistant',
+    kind: 'text',
     content: '你好！我是你的 AI 求职顾问。你可以手动填写左侧的求职画像，或者点击“上传简历”自动提取。确认画像后，可以点击“匹配岗位”看推荐，或者在下方问我任何面试、简历相关的问题。'
   }
 ])
@@ -283,10 +317,8 @@ const sending = ref(false)
 const parsingResume = ref(false)
 const matchingJobs = ref(false)
 const chatBodyRef = ref(null)
-const matchPool = ref([])
-const shownJobs = ref([])
 const jobDetailVisible = ref(false)
-const selectedMatch = ref(null)
+const selectedJob = ref(null)
 
 const scrollToBottom = async () => {
   await nextTick()
@@ -297,7 +329,10 @@ const scrollToBottom = async () => {
 
 const formatContent = (text) => {
   if (!text) return ''
-  return text.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  const raw = String(text)
+  const withBold = raw.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  const withLinks = withBold.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
+  return withLinks.replace(/\n/g, '<br/>')
 }
 
 const normalizeJobUrl = (url) => {
@@ -309,6 +344,11 @@ const normalizeJobUrl = (url) => {
   if (t.startsWith('/job_detail/')) return `https://www.zhipin.com${t}`
   if (t.startsWith('/')) return `https://jobs.51job.com${t}`
   return `https://${t}`
+}
+
+const canOpenUrl = (url) => {
+  const u = normalizeJobUrl(url)
+  return u && u !== '#'
 }
 
 const scoreColor = (score) => {
@@ -329,8 +369,8 @@ const sourceTagType = (sourceTable) => {
   return 'info'
 }
 
-const openJobDetail = (match) => {
-  selectedMatch.value = match || null
+const openJobDetail = (jobCard) => {
+  selectedJob.value = jobCard || null
   jobDetailVisible.value = true
 }
 
@@ -376,78 +416,225 @@ const openJobUrl = (url) => {
   window.open(u, '_blank', 'noopener,noreferrer')
 }
 
-const getJobKey = (job) => {
-  if (!job) return ''
-  if (job.jobUrl) return String(job.jobUrl)
-  if (job.id != null) return `id:${job.id}`
-  return `${job.jobName || ''}::${job.companyName || ''}::${job.city || ''}`
+const buildHistoryPayload = () => {
+  const maxHistory = 12
+  const tail = messages.value.slice(Math.max(0, messages.value.length - maxHistory))
+  return tail
+    .filter(m => (m.role === 'user' || m.role === 'assistant') && m.kind !== 'job_cards')
+    .map(m => ({ role: m.role, content: m.content }))
 }
 
-const shuffleArray = (arr) => {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    const t = arr[i]
-    arr[i] = arr[j]
-    arr[j] = t
+const JOB_RECO_MARKER = '__JOB_RECO_JSON__'
+
+const callCareerChat = async (payloadText) => {
+  const res = await api.careerChat({
+    profile: { ...profile.value },
+    message: payloadText,
+    history: buildHistoryPayload()
+  })
+  if (res.data.code !== 200) {
+    throw new Error(res.data.message || '请求失败')
   }
-  return arr
+  return res.data.data?.reply || ''
 }
 
-const pickShownJobs = () => {
-  const pool = matchPool.value || []
-  const n = Math.min(5, pool.length)
-  if (n === 0) {
-    shownJobs.value = []
-    return
+const extractRecoJson = (reply) => {
+  const raw = String(reply || '')
+  const idx = raw.indexOf(JOB_RECO_MARKER)
+  if (idx < 0) return null
+  const jsonPart = raw.substring(idx + JOB_RECO_MARKER.length).trim()
+  if (!jsonPart) return null
+  try {
+    return JSON.parse(jsonPart)
+  } catch (e) {
+    return null
+  }
+}
+
+const stripRecoMarker = (reply) => {
+  const raw = String(reply || '')
+  const idx = raw.indexOf(JOB_RECO_MARKER)
+  if (idx < 0) return raw.trim()
+  return raw.substring(0, idx).trim()
+}
+
+const pushUserText = async (text) => {
+  const userMsg = { id: `u_${Date.now()}`, role: 'user', kind: 'text', content: text }
+  messages.value.push(userMsg)
+  await scrollToBottom()
+}
+
+const pushAssistantText = async (text) => {
+  messages.value.push({ id: `a_${Date.now()}`, role: 'assistant', kind: 'text', content: text || '未返回内容' })
+  await scrollToBottom()
+}
+
+const pushAssistantJobCards = async (title, cards) => {
+  messages.value.push({
+    id: `c_${Date.now()}`,
+    role: 'assistant',
+    kind: 'job_cards',
+    title,
+    cards: cards || []
+  })
+  await scrollToBottom()
+}
+
+const sendToAI = async (displayText, payloadText) => {
+  await pushUserText(displayText)
+  sending.value = true
+  try {
+    const reply = await callCareerChat(payloadText)
+    await pushAssistantText(reply)
+  } catch (e) {
+    console.error(e)
+    const backendMessage = e?.response?.data?.message
+    const errorMessage = backendMessage || e?.message || 'AI 生成失败，请检查后端和百炼配置'
+    ElMessage.error(String(errorMessage))
+    await pushAssistantText('当前无法生成建议，请稍后重试。')
+  } finally {
+    sending.value = false
+  }
+}
+
+const buildCandidateLines = (list, limit = 8) => {
+  const out = []
+  const top = (list || []).slice(0, limit)
+  for (let i = 0; i < top.length; i++) {
+    const m = top[i]
+    const j = m?.job || {}
+    const src = m?.sourceTable === 'job_info_51job' ? '51job' : 'Boss'
+    const salary = (j.salaryMin != null && j.salaryMax != null) ? `${j.salaryMin}-${j.salaryMax}K` : '薪资面议'
+    const url = normalizeJobUrl(j.jobUrl)
+    out.push(`${i + 1}. [${src}] ${j.jobName || ''} @ ${j.companyName || ''} | ${j.city || ''} | ${salary} | ${j.experience || '经验不限'} | ${j.education || '学历不限'} | ${url}`)
+  }
+  return out.join('\n')
+}
+
+const buildCandidateCards = (list, limit = 10) => {
+  const top = (list || []).slice(0, limit)
+  const out = []
+  for (let i = 0; i < top.length; i++) {
+    const m = top[i]
+    const job = m?.job || {}
+    out.push({
+      index: i + 1,
+      key: `${m?.sourceTable || ''}::${job?.jobUrl || job?.id || ''}::${i}`,
+      job,
+      sourceTable: m?.sourceTable || '',
+      matchScore: m?.matchScore
+    })
+  }
+  return out
+}
+
+const pickIndex = (p) => {
+  const v = p?.index ?? p?.idx ?? p?.pick ?? p?.choice ?? p?.rankIndex
+  const n = Number(v)
+  return Number.isFinite(n) ? n : NaN
+}
+
+const toCardsFromReco = (candidates, reco) => {
+  const candByIndex = new Map()
+  for (const c of candidates) {
+    candByIndex.set(c.index, c)
   }
 
-  const prevKeys = new Set((shownJobs.value || []).map(m => getJobKey(m.job)))
-  const indices = shuffleArray([...Array(pool.length).keys()])
-
-  const picked = []
+  const picks = Array.isArray(reco?.picks) ? reco.picks : []
+  const out = []
   const used = new Set()
-  for (const idx of indices) {
-    const m = pool[idx]
-    const key = getJobKey(m?.job)
-    if (!key || used.has(key)) continue
-    used.add(key)
-    picked.push(m)
-    if (picked.length >= n) break
+  for (const p of picks) {
+    const idx = pickIndex(p)
+    if (!Number.isFinite(idx)) continue
+    const c = candByIndex.get(idx)
+    if (!c) continue
+    if (used.has(c.key)) continue
+    used.add(c.key)
+    out.push({
+      ...c,
+      aiReason: p?.reason ? String(p.reason) : (p?.match ? String(p.match) : ''),
+      aiGap: p?.gap ? String(p.gap) : '',
+      aiNext: p?.next ? String(p.next) : ''
+    })
+    if (out.length >= 5) break
   }
 
-  if (pool.length > n && picked.length === n) {
-    const sameSet = picked.every(m => prevKeys.has(getJobKey(m.job))) && prevKeys.size === n
-    if (sameSet) {
-      const indices2 = shuffleArray([...Array(pool.length).keys()])
-      const picked2 = []
-      const used2 = new Set()
-      for (const idx of indices2) {
-        const m = pool[idx]
-        const key = getJobKey(m?.job)
-        if (!key || used2.has(key)) continue
-        used2.add(key)
-        picked2.push(m)
-        if (picked2.length >= n) break
-      }
-      shownJobs.value = picked2
-      return
-    }
-  }
+  if (out.length > 0) return out
 
-  shownJobs.value = picked
+  return candidates.slice(0, 5).map(c => ({ ...c, aiReason: '' }))
 }
 
-const refreshMatches = async () => {
-  if (matchingJobs.value) return
+const handleMatchJobs = async () => {
   if (!profile.value.targetRole) {
     ElMessage.warning('请先填写目标岗位')
     return
   }
-  if (matchPool.value.length > 5) {
-    pickShownJobs()
-    return
+  if (sending.value) return
+  matchingJobs.value = true
+  try {
+    const res = await api.matchJobs({
+      targetRole: profile.value.targetRole,
+      city: profile.value.city,
+      education: profile.value.education,
+      experience: profile.value.experience,
+      skills: profile.value.skills,
+      notes: profile.value.notes,
+      highlights: Array.isArray(profileExtra.value?.highlights) ? profileExtra.value.highlights : [],
+      projects: Array.isArray(profileExtra.value?.projects)
+        ? profileExtra.value.projects.slice(0, 2).map(p => ({
+            name: p?.name || '',
+            role: p?.role || '',
+            tech: Array.isArray(p?.tech) ? p.tech : [],
+            highlights: Array.isArray(p?.highlights) ? p.highlights : []
+          }))
+        : []
+    })
+    if (res.data.code !== 200) {
+      throw new Error(res.data.message || '获取匹配岗位失败')
+    }
+    const list = res.data.data || []
+    if (!list.length) {
+      await pushAssistantText('没有找到特别匹配的岗位。建议放宽城市或把目标岗位写得更泛一些（例如“后端开发/Java”）。')
+      return
+    }
+
+    const displayText = '匹配岗位：请给我推荐最适合的岗位并说明理由'
+    await pushUserText(displayText)
+
+    const candidatesText = buildCandidateLines(list, 8)
+    const candidateCards = buildCandidateCards(list, 8)
+    const payloadText =
+      `我需要你从候选岗位中做精排推荐，并给出我该怎么投递与准备。\n\n` +
+      `候选岗位（来自数据库匹配结果）：\n${candidatesText}\n\n` +
+      `请按以下格式输出：先给出 3-6 行中文总结，然后在最后一行输出 ${JOB_RECO_MARKER} 后紧跟一个 JSON（不要用代码块）。\n` +
+      `JSON 结构示例：{"picks":[{"index":3,"reason":"...","gap":"...","next":"..."}]}\n` +
+      `其中 index 必须是候选列表的编号（1-10），最多给 5 个。\n\n` +
+      `请你完成：\n` +
+      `1) 从候选中挑选最适合我的 5 个岗位（按优先级排序）\n` +
+      `2) 每个岗位给出匹配点、差距点、以及我下一步该补什么\n` +
+      `3) 给出投递策略（简历怎么改/投递话术/面试准备重点）`
+
+    sending.value = true
+    try {
+      const reply = await callCareerChat(payloadText)
+      const reco = extractRecoJson(reply)
+      const pureText = stripRecoMarker(reply)
+      await pushAssistantText(pureText || '已完成岗位匹配推荐。')
+      if (reco) {
+        const cards = toCardsFromReco(candidateCards, reco)
+        await pushAssistantJobCards('推荐岗位（卡片可点开详情）', cards)
+      }
+    } finally {
+      sending.value = false
+    }
+  } catch (e) {
+    console.error(e)
+    const backendMessage = e?.response?.data?.message
+    const isTimeout = e?.code === 'ECONNABORTED' || String(e?.message || '').includes('timeout')
+    ElMessage.error('获取匹配岗位失败: ' + (backendMessage || (isTimeout ? '请求超时，请稍后再试' : (e?.message || '网络或服务端错误'))))
+  } finally {
+    matchingJobs.value = false
   }
-  await fetchMatchedJobs()
 }
 
 const handleResumeUpload = async (file) => {
@@ -460,8 +647,8 @@ const handleResumeUpload = async (file) => {
     ElMessage.error('仅支持 PDF, DOC, DOCX, TXT 格式的文件')
     return
   }
-  if (file.raw.size > 10 * 1024 * 1024) {
-    ElMessage.error('简历文件大小不能超过 10MB')
+  if (file.raw.size > 20 * 1024 * 1024) {
+    ElMessage.error('简历文件大小不能超过 20MB')
     return
   }
 
@@ -473,7 +660,15 @@ const handleResumeUpload = async (file) => {
     if (res.data.code !== 200) {
       throw new Error(res.data.message || '解析失败')
     }
-    const data = res.data.data
+    const data = res.data.data || {}
+    resumeMeta.value = data._resume || null
+    profileExtra.value = {
+      highlights: Array.isArray(data.highlights) ? data.highlights : [],
+      workExperiences: Array.isArray(data.workExperiences) ? data.workExperiences : [],
+      projects: Array.isArray(data.projects) ? data.projects : [],
+      certifications: Array.isArray(data.certifications) ? data.certifications : [],
+      links: Array.isArray(data.links) ? data.links : []
+    }
     profile.value = {
       targetRole: data.targetRole || profile.value.targetRole,
       city: data.city || profile.value.city,
@@ -482,54 +677,16 @@ const handleResumeUpload = async (file) => {
       skills: data.skills || profile.value.skills,
       notes: data.notes || profile.value.notes
     }
-    matchPool.value = []
-    shownJobs.value = []
     ElMessage.success('简历解析成功，已自动填充求职画像')
     
     // 自动追加一条提示消息
-    messages.value.push({
-      id: `a_${Date.now()}`,
-      role: 'assistant',
-      content: '我已经提取了你简历中的关键信息并填入左侧画像，你可以检查或修改它。建议你现在点击“匹配岗位”看看市场上有哪些合适的机会，或者让我帮你优化一下简历。'
-    })
-    await scrollToBottom()
+    await pushAssistantText('我已经提取了你简历中的关键信息并填入左侧画像，你可以检查或修改它。建议你现在点击“匹配岗位”让我按你的画像推荐岗位。')
   } catch (e) {
     console.error(e)
-    ElMessage.error('简历解析异常: ' + (e.message || '网络或服务端错误'))
+    const backendMessage = e?.response?.data?.message
+    ElMessage.error('简历解析异常: ' + (backendMessage || e.message || '网络或服务端错误'))
   } finally {
     parsingResume.value = false
-  }
-}
-
-const fetchMatchedJobs = async () => {
-  if (!profile.value.targetRole) {
-    ElMessage.warning('请先填写目标岗位')
-    return
-  }
-  matchingJobs.value = true
-  try {
-    const res = await api.matchJobs({
-      targetRole: profile.value.targetRole,
-      city: profile.value.city,
-      education: profile.value.education,
-      experience: profile.value.experience,
-      skills: profile.value.skills
-    })
-    if (res.data.code === 200) {
-      matchPool.value = res.data.data || []
-      pickShownJobs()
-      if (matchPool.value.length === 0) {
-        ElMessage.info('没有找到特别匹配的岗位，建议放宽城市或岗位词限制')
-      } else {
-        ElMessage.success(`为您准备了 ${matchPool.value.length} 个岗位，可刷一刷换一批`)
-      }
-    } else {
-      throw new Error(res.data.message)
-    }
-  } catch (e) {
-    ElMessage.error('获取匹配岗位失败')
-  } finally {
-    matchingJobs.value = false
   }
 }
 
@@ -542,8 +699,8 @@ const resetProfile = () => {
     skills: '',
     notes: ''
   }
-  matchPool.value = []
-  shownJobs.value = []
+  resumeMeta.value = null
+  profileExtra.value = { highlights: [], workExperiences: [], projects: [], certifications: [], links: [] }
 }
 
 const clearChat = () => {
@@ -551,6 +708,7 @@ const clearChat = () => {
     {
       id: `m_${Date.now()}`,
       role: 'assistant',
+      kind: 'text',
       content: '已清空对话。你可以重新描述你的目标与当前情况，我会继续给出建议。'
     }
   ]
@@ -562,43 +720,23 @@ const usePrompt = (text) => {
   input.value = text
 }
 
-const buildHistoryPayload = () => {
-  const maxHistory = 12
-  const tail = messages.value.slice(Math.max(0, messages.value.length - maxHistory))
-  return tail
-    .filter(m => m.role === 'user' || m.role === 'assistant')
-    .map(m => ({ role: m.role, content: m.content }))
-}
-
 const handleSend = async () => {
   const content = input.value.trim()
   if (!content) return
 
-  const userMsg = { id: `u_${Date.now()}`, role: 'user', content }
-  messages.value.push(userMsg)
+  await pushUserText(content)
   input.value = ''
-  await scrollToBottom()
 
   sending.value = true
   try {
-    const res = await api.careerChat({
-      profile: { ...profile.value },
-      message: content,
-      history: buildHistoryPayload()
-    })
-    if (res.data.code !== 200) {
-      throw new Error(res.data.message || '请求失败')
-    }
-    const reply = res.data.data?.reply || ''
-    messages.value.push({ id: `a_${Date.now()}`, role: 'assistant', content: reply || '未返回内容' })
-    await scrollToBottom()
+    const reply = await callCareerChat(content)
+    await pushAssistantText(reply || '未返回内容')
   } catch (e) {
     console.error(e)
     const backendMessage = e?.response?.data?.message
     const errorMessage = backendMessage || e?.message || 'AI 生成失败，请检查后端和百炼配置'
     ElMessage.error(String(errorMessage))
-    messages.value.push({ id: `a_${Date.now()}`, role: 'assistant', content: '当前无法生成建议，请稍后重试。' })
-    await scrollToBottom()
+    await pushAssistantText('当前无法生成建议，请稍后重试。')
   } finally {
     sending.value = false
   }
@@ -638,8 +776,7 @@ const handleSend = async () => {
 }
 
 .profile-card,
-.chat-card,
-.match-card {
+.chat-card {
   border-radius: 12px;
   border: none;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
@@ -667,6 +804,76 @@ const handleSend = async () => {
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid #f1f5f9;
+}
+
+.resume-meta-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.resume-collapse {
+  margin-top: 10px;
+}
+
+.resume-preview {
+  white-space: pre-wrap;
+  font-size: 12px;
+  color: #334155;
+  line-height: 1.6;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.resume-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.resume-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.resume-mini-card {
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.resume-mini-title {
+  font-weight: 800;
+  font-size: 13px;
+  color: #0f172a;
+  margin-bottom: 6px;
+}
+
+.resume-mini-sub {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.resume-mini-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.resume-mini-text {
+  font-size: 12px;
+  color: #334155;
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
 
 .chat-actions {
@@ -738,6 +945,186 @@ const handleSend = async () => {
   word-break: break-word;
   line-height: 1.6;
   font-size: 14px;
+}
+
+.job-cards {
+  width: 100%;
+}
+
+.job-cards-bubble {
+  width: 100%;
+  max-width: 100%;
+}
+
+.job-cards-header {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 10px;
+}
+
+.job-card {
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.job-card:hover {
+  transform: translateY(-1px);
+  border-color: #cbd5e1;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+}
+
+.job-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.job-card-title {
+  font-weight: 800;
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.job-card-sub {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 10px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+}
+
+.job-card-salary-pill {
+  flex: none;
+  font-weight: 800;
+  color: #4f46e5;
+  background: rgba(79, 70, 229, 0.10);
+  border: 1px solid rgba(79, 70, 229, 0.18);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.job-card-salary-pill.muted {
+  color: #64748b;
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+.job-card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.job-card-score {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.job-card-score-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  flex: none;
+  white-space: nowrap;
+}
+
+.job-card-reason {
+  font-size: 12px;
+  color: #334155;
+  line-height: 1.6;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 10px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.job-card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.job-detail-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.job-detail-name {
+  font-weight: 800;
+  font-size: 18px;
+  color: #0f172a;
+}
+
+.job-detail-sub {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.job-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.job-detail-section-title {
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.job-detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.job-detail-text {
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.job-detail-desc {
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.job-detail-url-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
 .chat-line.user .chat-content {
