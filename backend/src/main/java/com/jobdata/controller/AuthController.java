@@ -30,7 +30,7 @@ public class AuthController {
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             return Result.fail("密码错误");
         }
-        String token = jwtUtil.generateToken(user.getUsername(), user.getId());
+        String token = jwtUtil.generateToken(user.getUsername(), user.getId(), user.getRole());
         LoginResponse.UserInfo userInfo = new LoginResponse.UserInfo(user.getId(), user.getUsername(), user.getRole());
         return Result.success(new LoginResponse(token, userInfo));
     }
@@ -55,4 +55,3 @@ public class AuthController {
         return Result.success("登出成功");
     }
 }
-

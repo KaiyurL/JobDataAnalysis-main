@@ -1,9 +1,9 @@
 
 <template>
-  <div class="data-management">
-    <div class="page-header">
-      <h1>🔧 数据管理</h1>
-      <p>监控爬虫状态、管理数据更新和自定义爬取配置</p>
+  <div class="u-stack">
+    <div class="jd-page-head">
+      <div class="jd-page-head__title jd-page-head__title-text u-title">🔧 数据管理</div>
+      <div class="jd-page-head__desc">监控爬虫状态、管理数据更新和自定义爬取配置</div>
     </div>
 
     <el-row :gutter="20">
@@ -44,7 +44,7 @@
           </el-descriptions>
         </el-card>
 
-        <el-card class="config-card" shadow="hover" style="margin-top: 20px;">
+        <el-card class="config-card u-mt-5" shadow="hover">
           <template #header>
             <div class="card-header">
               <span>⚙️ 爬虫配置</span>
@@ -199,7 +199,7 @@
           </el-form>
         </el-card>
 
-        <el-card class="keyword-card" shadow="hover" style="margin-top: 20px;">
+        <el-card class="keyword-card u-mt-5" shadow="hover">
           <template #header>
             <span>📈 关键词数据分布</span>
           </template>
@@ -619,27 +619,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.data-management {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.page-header h1 {
-  margin: 0 0 8px 0;
-  font-size: 28px;
-  color: #333;
-}
-
-.page-header p {
-  margin: 0;
-  color: #666;
-  font-size: 14px;
-}
-
 .card-header {
   display: flex;
   justify-content: space-between;
@@ -652,21 +631,21 @@ onUnmounted(() => {
 .log-card,
 .config-card,
 .preview-card {
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .stat-number {
   font-size: 24px;
-  font-weight: bold;
-  color: #409EFF;
+  font-weight: 900;
+  color: var(--c-primary-700);
 }
 
 .stat-text {
-  color: #333;
+  color: var(--c-ink);
 }
 
 .status-message {
-  color: #666;
+  color: var(--c-ink-2);
 }
 
 .keyword-list {
@@ -690,11 +669,12 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   height: 20px;
-  background: #f5f7fa;
+  background: rgba(255, 255, 255, 0.55);
   border-radius: 10px;
   overflow: hidden;
   padding: 0 10px;
   position: relative;
+  border: 1px solid var(--c-border);
 }
 
 .keyword-bar {
@@ -702,7 +682,7 @@ onUnmounted(() => {
   left: 0;
   top: 0;
   height: 100%;
-  background: linear-gradient(90deg, #409EFF, #67C23A);
+  background: linear-gradient(90deg, var(--c-primary-600), var(--c-accent-500));
   border-radius: 10px;
   transition: width 0.3s;
 }
@@ -712,7 +692,8 @@ onUnmounted(() => {
   z-index: 1;
   margin-left: auto;
   font-size: 12px;
-  color: #666;
+  color: var(--c-ink-2);
+  font-weight: 700;
 }
 
 .update-section {
@@ -722,14 +703,15 @@ onUnmounted(() => {
 .tips {
   margin-top: 20px;
   padding: 15px;
-  background: #f5f7fa;
+  background: rgba(255, 255, 255, 0.55);
   border-radius: 6px;
+  border: 1px solid var(--c-border);
 }
 
 .tips p {
   margin: 0 0 8px 0;
   font-size: 13px;
-  color: #666;
+  color: var(--c-ink-2);
 }
 
 .tips p:last-child {
@@ -739,20 +721,20 @@ onUnmounted(() => {
 .form-tip {
   margin-top: 8px;
   font-size: 12px;
-  color: #999;
+  color: var(--c-ink-3);
 }
 
 .log-container {
   height: 300px;
   overflow-y: auto;
-  background: #1e1e1e;
-  border-radius: 6px;
+  background: rgba(11, 18, 32, 0.92);
+  border-radius: var(--radius-md);
   padding: 15px;
 }
 
 .empty-log {
   text-align: center;
-  color: #666;
+  color: var(--c-ink-3);
   padding: 50px;
 }
 
@@ -764,7 +746,7 @@ onUnmounted(() => {
 }
 
 .log-time {
-  color: #4ec9b0;
+  color: var(--c-primary-500);
   margin-right: 10px;
 }
 
@@ -776,7 +758,7 @@ onUnmounted(() => {
   display: flex;
   margin-bottom: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--c-border);
 }
 
 .preview-item:last-child {
@@ -787,13 +769,13 @@ onUnmounted(() => {
 
 .preview-label {
   width: 100px;
-  color: #666;
+  color: var(--c-ink-3);
   flex-shrink: 0;
 }
 
 .preview-value {
   flex: 1;
-  color: #333;
-  font-weight: 500;
+  color: var(--c-ink);
+  font-weight: 700;
 }
 </style>

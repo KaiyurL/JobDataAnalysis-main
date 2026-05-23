@@ -26,6 +26,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests()
                 .antMatchers("/api/auth/**").permitAll()
                 .antMatchers("/api/resume/parse").permitAll()
+                .antMatchers("/api/data/**", "/api/config/**", "/api/pipeline/**").hasRole("ADMIN")
                 .antMatchers("/api/**").authenticated()
                 .anyRequest().permitAll();
 
@@ -38,4 +39,3 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 }
-

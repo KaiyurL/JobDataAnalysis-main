@@ -17,10 +17,11 @@ public class JwtUtil {
     private static final long EXPIRATION = 7 * 24 * 60 * 60 * 1000; // 7天
     private static final Key SECRET_KEY = Keys.hmacShaKeyFor("JobDataSecretKeyForJwtToken1234567890123456".getBytes());
 
-    public String generateToken(String username, Long userId) {
+    public String generateToken(String username, Long userId, String role) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("username", username);
+        claims.put("role", role);
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(username)
@@ -46,6 +47,11 @@ public class JwtUtil {
         return Long.valueOf(parseToken(token).get("userId").toString());
     }
 
+    public String getRole(String token) {
+        Object v = parseToken(token).get("role");
+        return v == null ? null : String.valueOf(v);
+    }
+
     public boolean validateToken(String token) {
         try {
             Claims claims = parseToken(token);
@@ -55,4 +61,3 @@ public class JwtUtil {
         }
     }
 }
-

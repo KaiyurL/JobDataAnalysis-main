@@ -1,8 +1,8 @@
 <template>
-  <div class="skill-analysis">
-    <div class="page-header">
-      <h1>📊 技能分析</h1>
-      <p>深入分析招聘市场中热门技能的需求情况</p>
+  <div class="u-stack">
+    <div class="jd-page-head">
+      <div class="jd-page-head__title jd-page-head__title-text u-title">📊 技能分析</div>
+      <div class="jd-page-head__desc">深入分析招聘市场中热门技能的需求情况</div>
     </div>
 
     <el-card class="filter-card" shadow="hover">
@@ -44,7 +44,7 @@
           <template #header>
           <span>🔥 技能关键词云</span>
         </template>
-          <div v-loading="loading" ref="wordCloudRef" class="chart-container"></div>
+          <div v-loading="loading" ref="wordCloudRef" class="jd-chart jd-chart-lg"></div>
           <el-empty v-if="!loading && keywordData.length === 0" description="暂无数据" />
         </el-card>
       </el-col>
@@ -53,25 +53,25 @@
           <template #header>
           <span>⭐ 热门技能 TOP20</span>
         </template>
-          <div v-loading="loading" ref="skillBarRef" class="chart-container"></div>
+          <div v-loading="loading" ref="skillBarRef" class="jd-chart jd-chart-lg"></div>
           <el-empty v-if="!loading && keywordData.length === 0" description="暂无数据" />
         </el-card>
       </el-col>
     </el-row>
 
-    <el-row :gutter="20" style="margin-top: 20px">
+    <el-row :gutter="20" class="u-mt-5">
       <el-col :span="24">
         <el-card class="chart-card" shadow="hover">
           <template #header>
           <span>📈 技能分布图</span>
         </template>
-          <div v-loading="loading" ref="skillScatterRef" class="chart-container"></div>
+          <div v-loading="loading" ref="skillScatterRef" class="jd-chart jd-chart-xl"></div>
           <el-empty v-if="!loading && keywordData.length === 0" description="暂无数据" />
         </el-card>
       </el-col>
     </el-row>
 
-    <el-row :gutter="20" style="margin-top: 20px">
+    <el-row :gutter="20" class="u-mt-5">
       <el-col :span="24">
         <el-card class="stats-card" shadow="hover">
           <template #header>
@@ -113,6 +113,27 @@ import 'echarts-wordcloud'
 import { Search, RefreshLeft } from '@element-plus/icons-vue'
 import api from '../api.js'
 import { ElMessage } from 'element-plus'
+
+const cssVar = (name, fallback) => {
+  if (typeof window === 'undefined') return fallback
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name)
+    const t = String(v || '').trim()
+    return t || fallback
+  } catch {
+    return fallback
+  }
+}
+
+const theme = () => ({
+  primary: cssVar('--c-primary-600', '#0f766e'),
+  primary2: cssVar('--c-primary-500', '#14b8a6'),
+  accent: cssVar('--c-accent-500', '#ff6b4a'),
+  info: cssVar('--c-info', '#2563eb'),
+  success: cssVar('--c-success', '#16a34a'),
+  warning: cssVar('--c-warning', '#f59e0b'),
+  danger: cssVar('--c-danger', '#dc2626')
+})
 
 const wordCloudRef = ref(null)
 const skillBarRef = ref(null)
@@ -226,10 +247,11 @@ const calculatePercentage = (count) => {
 
 const getProgressColor = (count) => {
   const percentage = calculatePercentage(count)
-  if (percentage > 10) return '#f5576c'
-  if (percentage > 5) return '#f093fb'
-  if (percentage > 2) return '#667eea'
-  return '#4facfe'
+  const t = theme()
+  if (percentage > 10) return t.danger
+  if (percentage > 5) return t.warning
+  if (percentage > 2) return t.accent
+  return t.primary
 }
 
 const initCharts = () => {
@@ -245,6 +267,7 @@ const updateCharts = () => {
 }
 
 const updateWordCloud = () => {
+  const t = theme()
   const words = keywordData.value.map(d => ({
     name: d.keyword,
     value: d.count
@@ -258,10 +281,10 @@ const updateWordCloud = () => {
       rotationRange: [-45, 45],
       shape: 'pentagon',
       textStyle: {
-        fontFamily: 'sans-serif',
+        fontFamily: 'IBM Plex Sans, sans-serif',
         fontWeight: 'bold',
         color: function () {
-          const colors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe', '#11998e', '#38ef7d']
+          const colors = [t.primary, t.primary2, t.accent, t.info, t.success, t.warning]
           return colors[Math.floor(Math.random() * colors.length)]
         }
       },
@@ -272,6 +295,7 @@ const updateWordCloud = () => {
 }
 
 const updateSkillBar = () => {
+  const t = theme()
   const topSkills = keywordData.value.slice(0, 20).reverse()
   const option = {
     tooltip: { 
@@ -287,16 +311,18 @@ const updateSkillBar = () => {
       data: topSkills.map(d => d.count),
       itemStyle: {
         color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-          { offset: 0, color: '#667eea' },
-          { offset: 1, color: '#764ba2' }
+          { offset: 0, color: t.primary },
+          { offset: 1, color: t.accent }
         ])
-      }
+      },
+      barWidth: 14
     }]
   }
   skillBarChart.setOption(option, true)
 }
 
 const updateSkillScatter = () => {
+  const t = theme()
   const topSkills = keywordData.value.slice(0, 30)
   const option = {
     tooltip: {
@@ -316,8 +342,8 @@ const updateSkillScatter = () => {
       symbolSize: (data) => Math.sqrt(data[1]) * 5,
       itemStyle: {
         color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: '#4facfe' },
-          { offset: 1, color: '#00f2fe' }
+          { offset: 0, color: t.info },
+          { offset: 1, color: t.primary2 }
         ])
       }
     }]
@@ -344,49 +370,3 @@ onUnmounted(() => {
   skillScatterChart && skillScatterChart.dispose()
 })
 </script>
-
-<style scoped>
-.skill-analysis {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.page-header h1 {
-  margin: 0 0 8px 0;
-  font-size: 28px;
-  color: #333;
-}
-
-.page-header p {
-  margin: 0;
-  color: #666;
-  font-size: 14px;
-}
-
-.filter-card {
-  margin-bottom: 20px;
-  border-radius: 8px;
-}
-
-.filter-form {
-  margin-bottom: 0;
-}
-
-.chart-card {
-  border-radius: 8px;
-  margin-bottom: 20px;
-}
-
-.chart-container {
-  height: 400px;
-  width: 100%;
-}
-
-.stats-card {
-  border-radius: 8px;
-}
-</style>

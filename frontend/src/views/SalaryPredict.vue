@@ -1,8 +1,8 @@
 <template>
-  <div class="salary-predict">
-    <div class="page-header">
-      <h1>💰 薪资预测</h1>
-      <p>根据您的条件，预测您的期望薪资范围</p>
+  <div class="u-stack">
+    <div class="jd-page-head">
+      <div class="jd-page-head__title jd-page-head__title-text u-title">💰 薪资预测</div>
+      <div class="jd-page-head__desc">根据您的条件，预测您的期望薪资范围</div>
     </div>
 
     <el-row :gutter="20">
@@ -64,7 +64,7 @@
           
           <el-progress 
             :percentage="90" 
-            :color="['#67C23A', '#E6A23C', '#F56C6C']"
+            :color="progressColors"
             :stroke-width="20"
             class="confidence-bar"
           />
@@ -89,7 +89,7 @@
           </el-table>
         </el-card>
         
-        <el-empty v-else description="请输入条件并点击预测" style="margin-top: 80px" />
+        <el-empty v-else description="请输入条件并点击预测" class="u-mt-6" />
       </el-col>
     </el-row>
   </div>
@@ -100,6 +100,23 @@ import { ref, onMounted } from 'vue'
 import { MagicStick } from '@element-plus/icons-vue'
 import api from '../api.js'
 import { ElMessage } from 'element-plus'
+
+const cssVar = (name, fallback) => {
+  if (typeof window === 'undefined') return fallback
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name)
+    const t = String(v || '').trim()
+    return t || fallback
+  } catch {
+    return fallback
+  }
+}
+
+const progressColors = [
+  cssVar('--c-success', '#16a34a'),
+  cssVar('--c-warning', '#f59e0b'),
+  cssVar('--c-danger', '#dc2626')
+]
 
 const form = ref({
   city: '',
@@ -152,8 +169,8 @@ const handlePredict = async () => {
       }
     }
   } catch (e) {
-    console.error('预测失败', e)
-    ElMessage.error('预测失败，请稍后重试')
+    const msg = e?.response?.data?.message || e?.message || '预测失败，请稍后重试'
+    ElMessage.error(String(msg))
   } finally {
     loading.value = false
   }
@@ -163,85 +180,20 @@ onMounted(() => {
   loadCityOptions()
 })
 </script>
-
 <style scoped>
-.salary-predict {
-  max-width: 1400px;
-  margin: 0 auto;
-}
+.salary-range { display: flex; align-items: center; justify-content: center; padding: 30px 0; gap: 30px; }
+.range-item { text-align: center; }
+.range-item .label { display: block; font-size: 13px; color: var(--c-ink-3); margin-bottom: 10px; font-weight: 700; }
+.range-item .value { font-size: 36px; font-weight: 900; letter-spacing: -0.03em; }
+.range-item .value.min { color: var(--c-success); }
+.range-item .value.max { color: var(--c-danger); }
+.range-divider { font-size: 30px; color: var(--c-ink-3); font-weight: 900; }
+.confidence-bar { margin: 20px 0; }
+.confidence-text { text-align: center; color: var(--c-ink-3); font-size: 13px; margin: 0 0 10px 0; font-weight: 600; }
+.salary-tag { color: var(--c-danger); font-weight: 900; }
 
-.page-header {
-  margin-bottom: 20px;
-}
-
-.page-header h1 {
-  margin: 0 0 8px 0;
-  font-size: 28px;
-  color: #333;
-}
-
-.page-header p {
-  margin: 0;
-  color: #666;
-  font-size: 14px;
-}
-
-.form-card,
-.result-card {
-  border-radius: 8px;
-}
-
-.salary-range {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 30px 0;
-  gap: 30px;
-}
-
-.range-item {
-  text-align: center;
-}
-
-.range-item .label {
-  display: block;
-  font-size: 14px;
-  color: #999;
-  margin-bottom: 10px;
-}
-
-.range-item .value {
-  font-size: 36px;
-  font-weight: bold;
-}
-
-.range-item .value.min {
-  color: #67C23A;
-}
-
-.range-item .value.max {
-  color: #F56C6C;
-}
-
-.range-divider {
-  font-size: 32px;
-  color: #999;
-  font-weight: bold;
-}
-
-.confidence-bar {
-  margin: 20px 0;
-}
-
-.confidence-text {
-  text-align: center;
-  color: #999;
-  font-size: 14px;
-  margin: 0 0 10px 0;
-}
-
-.salary-tag {
-  color: #F56C6C;
-  font-weight: bold;
+@media (max-width: 640px) {
+  .salary-range { gap: 14px; }
+  .range-item .value { font-size: 28px; }
 }
 </style>

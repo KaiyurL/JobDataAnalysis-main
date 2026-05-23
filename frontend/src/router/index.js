@@ -1,13 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import Dashboard from '../views/Dashboard.vue'
-import JobAnalysisLayout from '../views/JobAnalysisLayout.vue'
-import JobAnalysis from '../views/JobAnalysis.vue'
-import SkillAnalysis from '../views/SkillAnalysis.vue'
-import SalaryPredict from '../views/SalaryPredict.vue'
-import JobMatch from '../views/JobMatch.vue'
-import CompanyInsight from '../views/CompanyInsight.vue'
-import DataManagement from '../views/DataManagement.vue'
-import Login from '../views/Login.vue'
+
+const Dashboard = () => import('../views/Dashboard.vue')
+const JobAnalysisLayout = () => import('../views/JobAnalysisLayout.vue')
+const JobAnalysis = () => import('../views/JobAnalysis.vue')
+const SkillAnalysis = () => import('../views/SkillAnalysis.vue')
+const SalaryPredict = () => import('../views/SalaryPredict.vue')
+const JobMatch = () => import('../views/JobMatch.vue')
+const CompanyInsight = () => import('../views/CompanyInsight.vue')
+const DataManagement = () => import('../views/DataManagement.vue')
+const Login = () => import('../views/Login.vue')
 
 const routes = [
   {
@@ -24,7 +25,7 @@ const routes = [
     path: '/dashboard',
     name: 'Dashboard',
     component: Dashboard,
-    meta: { title: '数据仪表盘', requiresAuth: true, icon: 'Odometer' }
+    meta: { title: '数据仪表盘', requiresAuth: true, icon: 'Odometer', keepAlive: true }
   },
   {
     path: '/job-analysis',
@@ -75,7 +76,7 @@ const routes = [
     path: '/data-management',
     name: 'DataManagement',
     component: DataManagement,
-    meta: { title: '系统设置', requiresAuth: true, icon: 'Setting' }
+    meta: { title: '系统设置', requiresAuth: true, icon: 'Setting', roles: ['admin'] }
   }
 ]
 
@@ -87,10 +88,15 @@ const router = createRouter({
 // 路由守卫
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token')
+  const storedUserInfo = localStorage.getItem('userInfo') || sessionStorage.getItem('userInfo')
+  const userInfo = storedUserInfo ? JSON.parse(storedUserInfo) : null
+  const userRole = String(userInfo?.role || 'user').toLowerCase()
   
   if (to.meta.requiresAuth && !token) {
     next('/login')
   } else if (to.path === '/login' && token) {
+    next('/dashboard')
+  } else if (Array.isArray(to.meta.roles) && to.meta.roles.length > 0 && !to.meta.roles.map(r => String(r).toLowerCase()).includes(userRole)) {
     next('/dashboard')
   } else {
     next()

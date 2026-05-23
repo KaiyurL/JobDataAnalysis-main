@@ -1,141 +1,19 @@
 <template>
-  <div class="job-match">
-    <div class="page-header">
-      <h1>🤖 智能求职助手</h1>
-      <p>基于阿里云百炼大模型，为你生成定制化求职建议（支持上传简历智能解析与岗位匹配建议）</p>
-    </div>
-
+  <div class="u-stack">
     <el-row :gutter="16">
-      <!-- 左侧：求职画像 -->
-      <el-col :xs="24" :sm="24" :md="7" :lg="6">
-        <el-card class="profile-card" shadow="hover">
-          <template #header>
-            <div class="card-header">
-              <span>🧾 求职画像</span>
-              <div style="display: flex; gap: 8px;">
-                <el-upload
-                  action="#"
-                  :auto-upload="false"
-                  :show-file-list="false"
-                  :on-change="handleResumeUpload"
-                  accept=".pdf,.doc,.docx,.txt"
-                >
-                  <el-button type="primary" size="small" :loading="parsingResume" title="上传简历解析">
-                    <el-icon><Upload /></el-icon>
-                  </el-button>
-                </el-upload>
-                <el-button size="small" @click="resetProfile" title="重置"><el-icon><RefreshLeft /></el-icon></el-button>
-              </div>
-            </div>
-          </template>
-
-          <el-form label-position="top" :model="profile">
-            <el-form-item label="目标岗位">
-              <el-input v-model="profile.targetRole" placeholder="例如：Java后端 / 前端" clearable />
-            </el-form-item>
-            <el-form-item label="城市">
-              <el-input v-model="profile.city" placeholder="例如：北京/远程" clearable />
-            </el-form-item>
-            <el-form-item label="学历">
-              <el-select v-model="profile.education" placeholder="选择学历" clearable style="width: 100%">
-                <el-option label="大专" value="大专" />
-                <el-option label="本科" value="本科" />
-                <el-option label="硕士" value="硕士" />
-                <el-option label="博士" value="博士" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="经验">
-              <el-select v-model="profile.experience" placeholder="选择经验" clearable style="width: 100%">
-                <el-option label="应届生" value="应届生" />
-                <el-option label="1-3年" value="1-3年" />
-                <el-option label="3-5年" value="3-5年" />
-                <el-option label="5-10年" value="5-10年" />
-                <el-option label="10年以上" value="10年以上" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="技能（用逗号分隔）">
-              <el-input
-                v-model="profile.skills"
-                type="textarea"
-                :rows="2"
-                placeholder="例如：Java, Spring Boot, MySQL"
-              />
-            </el-form-item>
-            <el-form-item label="补充说明">
-              <el-input
-                v-model="profile.notes"
-                type="textarea"
-                :rows="2"
-                placeholder="希望找实习；面试薄弱等"
-              />
-            </el-form-item>
-          </el-form>
-
-          <div v-if="resumeMeta" class="resume-meta-row">
-            <el-tag size="small" type="success" effect="plain">已解析：{{ resumeMeta.fileType?.toUpperCase?.() || resumeMeta.fileType }}</el-tag>
-            <el-tag v-if="resumeMeta.textLength != null" size="small" type="info" effect="plain">文本 {{ resumeMeta.textLength }} 字</el-tag>
-          </div>
-
-          <el-collapse v-if="resumeMeta && resumeMeta.rich" class="resume-collapse" accordion>
-            <el-collapse-item title="简历内容预览（节选）" name="preview">
-              <div class="resume-preview">{{ resumeMeta.textPreview }}</div>
-            </el-collapse-item>
-            <el-collapse-item v-if="profileExtra.highlights?.length" title="结构化亮点" name="highlights">
-              <div class="resume-list">
-                <div v-for="(x, i) in profileExtra.highlights" :key="i" class="resume-list-item">• {{ x }}</div>
-              </div>
-            </el-collapse-item>
-            <el-collapse-item v-if="profileExtra.projects?.length" title="项目经历" name="projects">
-              <div class="resume-cards">
-                <el-card v-for="(p, i) in profileExtra.projects" :key="i" class="resume-mini-card" shadow="never">
-                  <div class="resume-mini-title">{{ p.name || '项目' }}<span v-if="p.role"> · {{ p.role }}</span></div>
-                  <div v-if="p.tech?.length" class="resume-mini-tags">
-                    <el-tag v-for="t in p.tech" :key="t" size="small" type="info" effect="plain">{{ t }}</el-tag>
-                  </div>
-                  <div v-if="p.highlights?.length" class="resume-mini-text">
-                    <div v-for="(h, j) in p.highlights" :key="j">• {{ h }}</div>
-                  </div>
-                </el-card>
-              </div>
-            </el-collapse-item>
-            <el-collapse-item v-if="profileExtra.workExperiences?.length" title="工作经历" name="work">
-              <div class="resume-cards">
-                <el-card v-for="(w, i) in profileExtra.workExperiences" :key="i" class="resume-mini-card" shadow="never">
-                  <div class="resume-mini-title">
-                    {{ w.company || '公司' }}<span v-if="w.title"> · {{ w.title }}</span>
-                  </div>
-                  <div v-if="w.start || w.end" class="resume-mini-sub">{{ w.start || '' }} - {{ w.end || '' }}</div>
-                  <div v-if="w.tech?.length" class="resume-mini-tags">
-                    <el-tag v-for="t in w.tech" :key="t" size="small" type="info" effect="plain">{{ t }}</el-tag>
-                  </div>
-                  <div v-if="w.highlights?.length" class="resume-mini-text">
-                    <div v-for="(h, j) in w.highlights" :key="j">• {{ h }}</div>
-                  </div>
-                </el-card>
-              </div>
-            </el-collapse-item>
-          </el-collapse>
-          
-          <div style="margin-top: 10px;">
-            <el-button type="success" plain size="small" style="width: 100%;" @click="handleMatchJobs" :loading="matchingJobs">
-              <el-icon style="margin-right: 4px;"><Search /></el-icon> 匹配岗位
-            </el-button>
-          </div>
-
-          <div class="quick-prompts">
-            <el-button size="small" @click="usePrompt('帮我做一份30天学习和投递计划')">行动计划</el-button>
-            <el-button size="small" @click="usePrompt('帮我优化简历要点，给出可以直接写到简历上的 bullet')">简历优化</el-button>
-            <el-button size="small" @click="usePrompt('列出我这种背景去面这个岗位，最容易被问到的5个面试题')">模拟面试</el-button>
-          </div>
-        </el-card>
-      </el-col>
-
-      <!-- 右侧：对话（包含推荐结果） -->
-      <el-col :xs="24" :sm="24" :md="17" :lg="18">
+      <el-col :xs="24" :sm="24" :md="24" :lg="24">
         <el-card class="chat-card" shadow="hover">
           <template #header>
             <div class="card-header">
-              <span>💬 AI 求职辅导</span>
+              <div class="chat-head-left">
+                <span>💬 AI 求职辅导</span>
+                <el-button class="profile-head-btn" size="small" @click="profileDrawerVisible = true">
+                  🧾 求职画像
+                  <span class="profile-head-meta">
+                    {{ profile.targetRole || '未设置目标岗位' }}<span v-if="profile.city"> · {{ profile.city }}</span>
+                  </span>
+                </el-button>
+              </div>
               <div class="chat-actions">
                 <el-button size="small" @click="clearChat" :disabled="sending || messages.length <= 1">清空对话</el-button>
               </div>
@@ -181,25 +59,160 @@
             </div>
           </div>
 
-          <div class="chat-input">
-            <el-input
-              v-model="input"
-              type="textarea"
-              :rows="3"
-              placeholder="输入你的问题，例如：我现在是应届生，目标 Java 后端，帮我规划投递与面试准备"
-              :disabled="sending"
-              @keydown.enter.exact.prevent="handleSend"
-            />
-            <div class="chat-buttons">
-              <el-button type="primary" @click="handleSend" :loading="sending" :disabled="!input.trim()">
-                发送
-              </el-button>
+          <div class="composer-shell">
+            <div class="composer">
+              <div class="composer-top">
+                <div class="composer-brand">          
+                </div>
+              </div>
+
+              <div class="composer-mid">
+                <el-input
+                  v-model="input"
+                  class="composer-input"
+                  type="textarea"
+                  :autosize="{ minRows: 1, maxRows: 4 }"
+                  placeholder="输入你的问题，例如：我现在是应届生，目标 Java 后端，帮我规划投递与面试准备"
+                  :disabled="sending"
+                  @keydown.enter.exact.prevent="handleSend"
+                />
+                <div class="composer-inline">
+                  <div class="chat-tools">
+                    <el-button type="success" plain size="small" @click="handleMatchJobs" :loading="matchingJobs" :disabled="sending">
+                      <el-icon><Search /></el-icon> 匹配岗位
+                    </el-button>
+                    <el-button size="small" @click="usePrompt('帮我优化简历要点，给出可以直接写到简历上的 bullet')">简历优化</el-button>
+                    <el-button size="small" @click="usePrompt('列出我这种背景去面这个岗位，最容易被问到的5个面试题')">模拟面试</el-button>
+                  </div>
+                  <div class="composer-actions">
+                    <el-button
+                      class="composer-send-btn"
+                      circle
+                      type="primary"
+                      @click="handleSend"
+                      :loading="sending"
+                      :disabled="!input.trim()"
+                      title="发送"
+                    >
+                      <el-icon><ArrowUp /></el-icon>
+                    </el-button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </el-card>
       </el-col>
 
     </el-row>
+
+    <el-dialog
+      v-model="profileDrawerVisible"
+      class="profile-dialog"
+      width="760px"
+      :append-to-body="true"
+      :destroy-on-close="false"
+      align-center
+    >
+      <template #header>
+        <div class="card-header">
+          <span>🧾 求职画像</span>
+          <div class="u-inline u-gap-2">
+            <el-upload
+              action="#"
+              :auto-upload="false"
+              :show-file-list="false"
+              :on-change="handleResumeUpload"
+              accept=".pdf,.doc,.docx,.txt"
+            >
+              <el-button type="primary" size="small" :loading="parsingResume">
+                <el-icon><Upload /></el-icon> 上传简历
+              </el-button>
+            </el-upload>
+            <el-button size="small" @click="resetProfile" title="重置"><el-icon><RefreshLeft /></el-icon></el-button>
+          </div>
+        </div>
+      </template>
+
+      <div class="profile-dialog-body">
+      <el-form label-position="top" :model="profile">
+        <el-form-item label="目标岗位">
+          <el-input v-model="profile.targetRole" placeholder="例如：Java后端 / 前端" clearable />
+        </el-form-item>
+        <el-form-item label="城市">
+          <el-input v-model="profile.city" placeholder="例如：北京/远程" clearable />
+        </el-form-item>
+        <el-form-item label="学历">
+          <el-select v-model="profile.education" placeholder="选择学历" clearable style="width: 100%">
+            <el-option label="大专" value="大专" />
+            <el-option label="本科" value="本科" />
+            <el-option label="硕士" value="硕士" />
+            <el-option label="博士" value="博士" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="经验">
+          <el-select v-model="profile.experience" placeholder="选择经验" clearable style="width: 100%">
+            <el-option label="应届生" value="应届生" />
+            <el-option label="1-3年" value="1-3年" />
+            <el-option label="3-5年" value="3-5年" />
+            <el-option label="5-10年" value="5-10年" />
+            <el-option label="10年以上" value="10年以上" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="技能（用逗号分隔）">
+          <el-input v-model="profile.skills" type="textarea" :rows="2" placeholder="例如：Java, Spring Boot, MySQL" />
+        </el-form-item>
+        <el-form-item label="补充说明">
+          <el-input v-model="profile.notes" type="textarea" :rows="2" placeholder="希望找实习；面试薄弱等" />
+        </el-form-item>
+      </el-form>
+
+      <div v-if="resumeMeta" class="resume-meta-row">
+        <el-tag size="small" type="success" effect="plain">已解析：{{ resumeMeta.fileType?.toUpperCase?.() || resumeMeta.fileType }}</el-tag>
+        <el-tag v-if="resumeMeta.textLength != null" size="small" type="info" effect="plain">文本 {{ resumeMeta.textLength }} 字</el-tag>
+      </div>
+
+      <el-collapse v-if="resumeMeta && resumeMeta.rich" class="resume-collapse" accordion>
+        <el-collapse-item title="简历内容预览（节选）" name="preview">
+          <div class="resume-preview">{{ resumeMeta.textPreview }}</div>
+        </el-collapse-item>
+        <el-collapse-item v-if="profileExtra.highlights?.length" title="结构化亮点" name="highlights">
+          <div class="resume-list">
+            <div v-for="(x, i) in profileExtra.highlights" :key="i" class="resume-list-item">• {{ x }}</div>
+          </div>
+        </el-collapse-item>
+        <el-collapse-item v-if="profileExtra.projects?.length" title="项目经历" name="projects">
+          <div class="resume-cards">
+            <el-card v-for="(p, i) in profileExtra.projects" :key="i" class="resume-mini-card" shadow="never">
+              <div class="resume-mini-title">{{ p.name || '项目' }}<span v-if="p.role"> · {{ p.role }}</span></div>
+              <div v-if="p.tech?.length" class="resume-mini-tags">
+                <el-tag v-for="t in p.tech" :key="t" size="small" type="info" effect="plain">{{ t }}</el-tag>
+              </div>
+              <div v-if="p.highlights?.length" class="resume-mini-text">
+                <div v-for="(h, j) in p.highlights" :key="j">• {{ h }}</div>
+              </div>
+            </el-card>
+          </div>
+        </el-collapse-item>
+        <el-collapse-item v-if="profileExtra.workExperiences?.length" title="工作经历" name="work">
+          <div class="resume-cards">
+            <el-card v-for="(w, i) in profileExtra.workExperiences" :key="i" class="resume-mini-card" shadow="never">
+              <div class="resume-mini-title">
+                {{ w.company || '公司' }}<span v-if="w.title"> · {{ w.title }}</span>
+              </div>
+              <div v-if="w.start || w.end" class="resume-mini-sub">{{ w.start || '' }} - {{ w.end || '' }}</div>
+              <div v-if="w.tech?.length" class="resume-mini-tags">
+                <el-tag v-for="t in w.tech" :key="t" size="small" type="info" effect="plain">{{ t }}</el-tag>
+              </div>
+              <div v-if="w.highlights?.length" class="resume-mini-text">
+                <div v-for="(h, j) in w.highlights" :key="j">• {{ h }}</div>
+              </div>
+            </el-card>
+          </div>
+        </el-collapse-item>
+      </el-collapse>
+      </div>
+    </el-dialog>
 
     <el-dialog v-model="jobDetailVisible" width="860px" :show-close="true" top="8vh">
       <template #header>
@@ -284,7 +297,24 @@
 import { ref, nextTick } from 'vue'
 import api from '../api.js'
 import { ElMessage } from 'element-plus'
-import { Upload, RefreshLeft, Search, View, CopyDocument, TopRight } from '@element-plus/icons-vue'
+import { Upload, RefreshLeft, Search, View, CopyDocument, TopRight, ArrowUp } from '@element-plus/icons-vue'
+
+const cssVar = (name, fallback) => {
+  if (typeof window === 'undefined') return fallback
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name)
+    const t = String(v || '').trim()
+    return t || fallback
+  } catch {
+    return fallback
+  }
+}
+
+const theme = () => ({
+  success: cssVar('--c-success', '#16a34a'),
+  info: cssVar('--c-info', '#2563eb'),
+  warning: cssVar('--c-warning', '#f59e0b')
+})
 
 const profile = ref({
   targetRole: '',
@@ -302,13 +332,14 @@ const profileExtra = ref({
   certifications: [],
   links: []
 })
+const profileDrawerVisible = ref(false)
 
 const messages = ref([
   {
     id: `m_${Date.now()}`,
     role: 'assistant',
     kind: 'text',
-    content: '你好！我是你的 AI 求职顾问。你可以手动填写左侧的求职画像，或者点击“上传简历”自动提取。确认画像后，可以点击“匹配岗位”看推荐，或者在下方问我任何面试、简历相关的问题。'
+    content: '你好！我是你的 AI 求职顾问。你可以点击上方的“求职画像”完善信息，或点击“上传简历”自动提取。确认画像后，点击下方“匹配岗位”即可获取推荐，也可以随时向我提问简历与面试相关的问题。'
   }
 ])
 
@@ -352,9 +383,10 @@ const canOpenUrl = (url) => {
 }
 
 const scoreColor = (score) => {
-  if (score >= 80) return '#10b981'
-  if (score >= 60) return '#3b82f6'
-  return '#f59e0b'
+  const t = theme()
+  if (score >= 80) return t.success
+  if (score >= 60) return t.info
+  return t.warning
 }
 
 const sourceLabel = (sourceTable) => {
@@ -744,43 +776,20 @@ const handleSend = async () => {
 </script>
 
 <style scoped>
-.job-match {
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
-.page-header {
-  margin-bottom: 24px;
-}
-
-.page-header h1 {
-  margin: 0 0 8px 0;
-  font-size: 28px;
-  color: #1e293b;
-  font-weight: 800;
-}
-
-.page-header p {
-  margin: 0;
-  color: #64748b;
-  font-size: 15px;
-}
-
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--c-ink);
 }
 
 .profile-card,
 .chat-card {
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: none;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-  height: calc(100vh - 150px);
+  height: calc(100vh - 104px);
   display: flex;
   flex-direction: column;
 }
@@ -797,13 +806,95 @@ const handleSend = async () => {
   overflow: hidden;
 }
 
-.quick-prompts {
+.chat-head-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.profile-head-btn {
+  border-radius: 999px;
+  border: 1px solid var(--c-border);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--c-ink);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.profile-head-meta {
+  font-weight: 600;
+  color: var(--c-ink-3);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-dialog :deep(.el-dialog) {
+  width: min(760px, 94vw) !important;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.profile-dialog :deep(.el-dialog__body) {
+  padding-top: 4px;
+}
+
+.profile-dialog :deep(.el-dialog__header) {
+  background: #ffffff;
+}
+
+.profile-dialog-body {
+  max-height: min(72vh, 720px);
+  overflow: auto;
+}
+
+.chat-tools {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #f1f5f9;
+  margin-bottom: 10px;
+  justify-content: flex-start;
+}
+
+:deep(.chat-tools .el-button) {
+  height: 34px;
+  padding: 0 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: transparent;
+  color: var(--c-ink);
+}
+
+.chat-tools :deep(.el-button:hover) {
+  background: rgba(15, 118, 110, 0.08);
+  border-color: rgba(15, 118, 110, 0.28);
+  color: var(--c-primary-700);
+}
+
+@media (max-width: 768px) {
+  .chat-body {
+    padding: 14px;
+  }
+
+  .chat-bubble {
+    max-width: 94%;
+  }
+
+  .profile-head-meta {
+    display: none;
+  }
+
+  :deep(.composer-input .el-textarea__inner) {
+    min-height: 54px !important;
+  }
 }
 
 .resume-meta-row {
@@ -884,13 +975,18 @@ const handleSend = async () => {
 .chat-body {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 16px 18px;
   background-color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .chat-line {
   display: flex;
-  margin-bottom: 20px;
+  width: min(1000px, 100%);
+
+  margin-bottom: 14px;
   animation: fadeIn 0.3s ease;
 }
 
@@ -910,17 +1006,17 @@ const handleSend = async () => {
 .chat-bubble {
   max-width: 85%;
   border-radius: 16px;
-  padding: 14px 18px;
+  padding: 12px 16px;
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 
 .chat-line.assistant .chat-bubble {
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.90);
   border-top-left-radius: 4px;
 }
 
 .chat-line.user .chat-bubble {
-  background: #4f46e5;
+  background: var(--c-primary-600);
   color: #ffffff;
   border-top-right-radius: 4px;
 }
@@ -933,18 +1029,18 @@ const handleSend = async () => {
 }
 
 .chat-line.user .chat-role {
-  color: #e0e7ff;
+  color: rgba(255, 255, 255, 0.88);
   text-align: right;
 }
 
 .chat-line.assistant .chat-role {
-  color: #64748b;
+  color: var(--c-ink-3);
 }
 
 .chat-content {
   word-break: break-word;
   line-height: 1.6;
-  font-size: 14px;
+  font-size: 13.5px;
 }
 
 .job-cards {
@@ -959,21 +1055,21 @@ const handleSend = async () => {
 .job-cards-header {
   font-size: 13px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--c-ink);
   margin-bottom: 10px;
 }
 
 .job-card {
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
+  border: 1px solid var(--c-border);
+  background: rgba(255, 255, 255, 0.90);
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
 }
 
 .job-card:hover {
   transform: translateY(-1px);
-  border-color: #cbd5e1;
+  border-color: var(--c-border-2);
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
 }
 
@@ -987,7 +1083,7 @@ const handleSend = async () => {
 
 .job-card-title {
   font-weight: 800;
-  color: #0f172a;
+  color: var(--c-ink);
   font-size: 14px;
   line-height: 1.3;
   display: -webkit-box;
@@ -998,7 +1094,7 @@ const handleSend = async () => {
 
 .job-card-sub {
   font-size: 12px;
-  color: #64748b;
+  color: var(--c-ink-3);
   margin-bottom: 10px;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -1009,9 +1105,9 @@ const handleSend = async () => {
 .job-card-salary-pill {
   flex: none;
   font-weight: 800;
-  color: #4f46e5;
-  background: rgba(79, 70, 229, 0.10);
-  border: 1px solid rgba(79, 70, 229, 0.18);
+  color: var(--c-primary-700);
+  background: rgba(15, 118, 110, 0.10);
+  border: 1px solid rgba(15, 118, 110, 0.18);
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 12px;
@@ -1019,9 +1115,9 @@ const handleSend = async () => {
 }
 
 .job-card-salary-pill.muted {
-  color: #64748b;
-  background: #f1f5f9;
-  border-color: #e2e8f0;
+  color: var(--c-ink-3);
+  background: rgba(255, 255, 255, 0.65);
+  border-color: var(--c-border);
 }
 
 .job-card-tags {
@@ -1041,17 +1137,17 @@ const handleSend = async () => {
 .job-card-score-text {
   font-size: 12px;
   font-weight: 700;
-  color: #334155;
+  color: var(--c-ink-2);
   flex: none;
   white-space: nowrap;
 }
 
 .job-card-reason {
   font-size: 12px;
-  color: #334155;
+  color: var(--c-ink-2);
   line-height: 1.6;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--c-border);
   border-radius: 10px;
   padding: 10px;
   margin-bottom: 10px;
@@ -1135,16 +1231,121 @@ const handleSend = async () => {
   color: #334155;
 }
 
-.chat-input {
-  padding: 16px 20px;
-  background: #ffffff;
-  border-top: 1px solid #e2e8f0;
+.composer-shell {
+  padding: 12px 14px;
+  background-color: #f8fafc;
+  display: flex;
+  justify-content: center;
 }
 
-.chat-buttons {
+.composer {
+  width: min(680px, 100%);
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  padding: 12px 12px 10px;
+}
+
+.composer-shell .composer {
+  margin: 0 auto;
+}
+
+.composer-top {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 8px;
+}
+
+.composer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(15, 23, 42, 0.58);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+
+
+.composer-mid {
+  position: relative;
+  padding: 0 2px;
+}
+
+:deep(.composer-input .el-textarea__inner) {
+  min-height: 56px !important;
+  border-radius: 18px;
+  padding: 12px 14px;
+  padding-bottom: 100px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(248, 250, 252, 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  color: var(--c-ink);
+  line-height: 1.7;
+  resize: none;
+  transition: border-color 180ms var(--ease-out), box-shadow 180ms var(--ease-out), transform 180ms var(--ease-out);
+}
+
+:deep(.composer-input .el-textarea__inner::placeholder) {
+  color: rgba(15, 23, 42, 0.45);
+}
+
+:deep(.composer-input .el-textarea__inner:focus) {
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transform: translateY(-1px);
+}
+
+.composer-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.composer-inline {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.composer-inline .chat-tools {
+  margin-bottom: 0;
+}
+
+.composer-inline .chat-tools :deep(.el-button) {
+  height: 30px;
+  padding: 0 10px;
+  font-weight: 700;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.composer-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.94);
+  color: rgba(15, 23, 42, 0.72);
+}
+
+.composer-send-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.26);
+}
+
+.composer-bottom {
+  padding: 10px 2px 0;
 }
 
 /* 推荐岗位样式 */
@@ -1181,18 +1382,18 @@ const handleSend = async () => {
 .match-title {
   font-weight: 700;
   font-size: 15px;
-  color: #1e293b;
+  color: var(--c-ink);
 }
 
 .match-salary {
   font-weight: 800;
-  color: #4f46e5;
+  color: var(--c-primary-700);
   font-size: 14px;
 }
 
 .match-company {
   font-size: 13px;
-  color: #64748b;
+  color: var(--c-ink-3);
   margin-bottom: 10px;
 }
 
@@ -1212,13 +1413,13 @@ const handleSend = async () => {
 .score-text {
   font-size: 12px;
   font-weight: 600;
-  color: #475569;
+  color: var(--c-ink-2);
 }
 
 .match-reason {
   font-size: 12px;
-  color: #64748b;
-  background: #ffffff;
+  color: var(--c-ink-3);
+  background: rgba(255, 255, 255, 0.55);
   padding: 8px;
   border-radius: 6px;
   margin-bottom: 10px;

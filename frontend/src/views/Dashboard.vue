@@ -1,15 +1,15 @@
 <template>
-  <div class="dashboard cockpit-layout" id="dashboard-content">
+  <div class="u-page" id="dashboard-content">
     <el-row :gutter="24" class="cockpit-row">
       <!-- 左侧控制台: 核心指标与玫瑰图 -->
       <el-col :xs="24" :lg="7" class="col-left">
-        <div class="brand-header">
-          <h1 class="gradient-text">📊 数据智能洞察</h1>
-          <p class="subtitle">全网招聘动态实时监控</p>
+        <div class="jd-page-head">
+          <div class="jd-page-head__title jd-page-head__title-text u-title">📊 数据智能洞察</div>
+          <div class="jd-page-head__desc">全网招聘动态实时监控</div>
         </div>
         
         <div class="bento-stats">
-          <div v-for="stat in mainStats" :key="stat.label" class="bento-stat-card" :class="stat.type">
+          <div v-for="stat in mainStats" :key="stat.label" class="bento-stat-card u-card u-card-pad" :class="stat.type">
             <div class="stat-icon"><el-icon><component :is="stat.icon" /></el-icon></div>
             <div class="stat-info">
               <div class="stat-value">{{ stat.value }}<small v-if="stat.unit">{{ stat.unit }}</small></div>
@@ -22,10 +22,10 @@
           <template #header>📌 结构分布</template>
           <el-tabs v-model="leftTab" class="dash-tabs" stretch>
             <el-tab-pane label="🏢 行业" name="industry">
-              <div v-show="leftTab === 'industry'" v-loading="loading" ref="industryChartRef" class="chart-content tab-chart"></div>
+              <div v-show="leftTab === 'industry'" v-loading="loading" ref="industryChartRef" class="jd-chart jd-chart-md"></div>
             </el-tab-pane>
             <el-tab-pane label="🎓 学历" name="edu">
-              <div v-show="leftTab === 'edu'" v-loading="loading" ref="eduChartRef" class="chart-content tab-chart"></div>
+              <div v-show="leftTab === 'edu'" v-loading="loading" ref="eduChartRef" class="jd-chart jd-chart-md"></div>
             </el-tab-pane>
           </el-tabs>
         </el-card>
@@ -51,19 +51,19 @@
 
         <el-card class="glass-card chart-box main-chart" shadow="never">
           <template #header>🏙️ 城市平均薪资全景 (K)</template>
-          <div v-loading="loading" ref="cityChartRef" class="chart-content large-chart"></div>
+          <div v-loading="loading" ref="cityChartRef" class="jd-chart jd-chart-lg"></div>
         </el-card>
 
         <el-card class="glass-card chart-box" shadow="never">
           <template #header>💼 经验成长薪资曲线</template>
-          <div v-loading="loading" ref="expChartRef" class="chart-content"></div>
+          <div v-loading="loading" ref="expChartRef" class="jd-chart jd-chart-sm"></div>
         </el-card>
       </el-col>
 
       <!-- 右侧侧翼: 操作区与技能分析 -->
       <el-col :xs="24" :lg="6" class="col-right">
         <div class="action-panel">
-          <el-button color="#7c3aed" class="action-btn" plain round @click="aiDrawerVisible = true">
+          <el-button type="primary" class="action-btn" plain round @click="aiDrawerVisible = true">
             <el-icon><DataLine /></el-icon> 深度数据分析
           </el-button>
           <el-button type="primary" class="action-btn" plain round @click="handleExportDashboard" :loading="exporting">
@@ -75,10 +75,10 @@
           <template #header>🧠 技能画像</template>
           <el-tabs v-model="rightTab" class="dash-tabs" stretch>
             <el-tab-pane label="🔥 生态" name="wordcloud">
-              <div v-show="rightTab === 'wordcloud'" v-loading="loading" ref="wordCloudRef" class="chart-content tab-chart"></div>
+              <div v-show="rightTab === 'wordcloud'" v-loading="loading" ref="wordCloudRef" class="jd-chart jd-chart-md"></div>
             </el-tab-pane>
             <el-tab-pane label="⭐ Top10" name="top10">
-              <div v-show="rightTab === 'top10'" v-loading="loading" ref="skillBarRef" class="chart-content tab-chart"></div>
+              <div v-show="rightTab === 'top10'" v-loading="loading" ref="skillBarRef" class="jd-chart jd-chart-md"></div>
             </el-tab-pane>
           </el-tabs>
         </el-card>
@@ -139,19 +139,19 @@
             <div class="metric-item">
               <div class="metric-label">
                 <span>MLP 预测准确率</span>
-                <span style="color: #4f46e5;">{{ (pipelineSummary?.mlp_val_acc * 100 || 0).toFixed(1) }}%</span>
+                <span class="u-primary">{{ (pipelineSummary?.mlp_val_acc * 100 || 0).toFixed(1) }}%</span>
               </div>
               <div class="metric-progress">
-                <el-progress :percentage="Number((pipelineSummary?.mlp_val_acc * 100 || 0).toFixed(1))" color="#4f46e5" :stroke-width="12" :show-text="false" />
+                <el-progress :percentage="Number((pipelineSummary?.mlp_val_acc * 100 || 0).toFixed(1))" color="var(--c-primary-600)" :stroke-width="12" :show-text="false" />
               </div>
             </div>
             <div class="metric-item">
               <div class="metric-label">
                 <span>TextCNN 预测准确率</span>
-                <span style="color: #7c3aed;">{{ (pipelineSummary?.textcnn_val_acc * 100 || 0).toFixed(1) }}%</span>
+                <span class="u-accent">{{ (pipelineSummary?.textcnn_val_acc * 100 || 0).toFixed(1) }}%</span>
               </div>
               <div class="metric-progress">
-                <el-progress :percentage="Number((pipelineSummary?.textcnn_val_acc * 100 || 0).toFixed(1))" color="#7c3aed" :stroke-width="12" :show-text="false" />
+                <el-progress :percentage="Number((pipelineSummary?.textcnn_val_acc * 100 || 0).toFixed(1))" color="var(--c-accent-500)" :stroke-width="12" :show-text="false" />
               </div>
             </div>
           </div>
@@ -194,19 +194,45 @@
 </template>
 
 <script setup>
+defineOptions({ name: 'Dashboard' })
+
 import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import 'echarts-wordcloud'
 import { 
   Search, RefreshLeft, Briefcase, Money, Location, 
-  Star, Download, Filter, Warning, RefreshRight, DataLine
+  Download, Filter, Warning, RefreshRight, DataLine
 } from '@element-plus/icons-vue'
 import api from '../api.js'
 import { ElMessage } from 'element-plus'
 import { exportToPDFMultiPage } from '../utils/exportPdf.js'
 
 const router = useRouter()
+
+const cssVar = (name, fallback) => {
+  if (typeof window === 'undefined') return fallback
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name)
+    const t = String(v || '').trim()
+    return t || fallback
+  } catch {
+    return fallback
+  }
+}
+
+const theme = () => ({
+  ink2: cssVar('--c-ink-2', '#334155'),
+  ink3: cssVar('--c-ink-3', '#64748b'),
+  border: cssVar('--c-border', 'rgba(15, 23, 42, 0.10)'),
+  primary: cssVar('--c-primary-600', '#0f766e'),
+  primary2: cssVar('--c-primary-500', '#14b8a6'),
+  accent: cssVar('--c-accent-500', '#ff6b4a'),
+  info: cssVar('--c-info', '#2563eb'),
+  success: cssVar('--c-success', '#16a34a'),
+  warning: cssVar('--c-warning', '#f59e0b'),
+  danger: cssVar('--c-danger', '#dc2626')
+})
 
 // 状态变量
 const exporting = ref(false)
@@ -244,7 +270,6 @@ let skillBarChart = null
 const totalJobs = ref(0)
 const avgMaxSalary = ref(0)
 const topCity = ref('-')
-const topSkill = ref('-')
 const cityData = ref([])
 const eduData = ref([])
 const expData = ref([])
@@ -264,7 +289,6 @@ const mainStats = computed(() => [
   { label: '总职位规模', value: totalJobs.value, icon: Briefcase, type: 'blue' },
   { label: '市场均薪', value: avgMaxSalary.value, unit: 'K', icon: Money, type: 'green' },
   { label: '高薪聚集地', value: topCity.value, icon: Location, type: 'orange' },
-  { label: '最紧缺技能', value: topSkill.value, icon: Star, type: 'purple' },
 ])
 
 const pipelineStatusText = computed(() => {
@@ -274,9 +298,10 @@ const pipelineStatusText = computed(() => {
 })
 
 const colors = (percentage) => {
-  if (percentage < 30) return '#f59e0b'
-  if (percentage < 70) return '#4f46e5'
-  return '#22c55e'
+  const t = theme()
+  if (percentage < 30) return t.warning
+  if (percentage < 70) return t.primary
+  return t.success
 }
 
 // 方法
@@ -401,7 +426,6 @@ const calculateStats = () => {
   }
   const salaries = cityData.value.map(d => d.avgSalary)
   avgMaxSalary.value = salaries.length ? Math.round(salaries.reduce((a,b)=>a+b, 0) / salaries.length * 10) / 10 : 0
-  topSkill.value = keywordData.value[0]?.keyword || '-'
 }
 
 const initCharts = () => {
@@ -417,22 +441,23 @@ const initCharts = () => {
 
 const updateCharts = () => {
   if (!cityChart || !eduChart || !expChart || !industryChart || !wordCloudChart || !skillBarChart) return
+  const t = theme()
   const chartConfigs = [
     { 
       instance: cityChart, 
       option: {
-        tooltip: { trigger: 'axis' },
+        tooltip: { trigger: 'axis', appendToBody: true, confine: true, extraCssText: 'z-index: 99999;' },
         dataZoom: [{ type: 'inside' }, { type: 'slider', height: 12, bottom: 0, showDetail: false }],
         grid: { bottom: 86, left: 40, right: 20, top: 40 },
         xAxis: { data: cityData.value.map(d => d.city), axisLabel: { rotate: 45, interval: 0, hideOverlap: false }, axisTick: { alignWithLabel: true } },
         yAxis: { name: 'K' },
-        series: [{ type: 'bar', data: cityData.value.map(d => d.avgSalary), itemStyle: { color: new echarts.graphic.LinearGradient(0,0,0,1, [{offset:0, color:'#6366f1'},{offset:1, color:'#3b82f6'}]), borderRadius: [4, 4, 0, 0] } }]
+        series: [{ type: 'bar', data: cityData.value.map(d => d.avgSalary), itemStyle: { color: new echarts.graphic.LinearGradient(0,0,0,1, [{ offset: 0, color: t.primary2 }, { offset: 1, color: t.info }]), borderRadius: [6, 6, 0, 0] } }]
       }
     },
     {
       instance: eduChart,
       option: {
-        tooltip: { trigger: 'item' },
+        tooltip: { trigger: 'item', appendToBody: true, confine: true, extraCssText: 'z-index: 99999;' },
         radar: {
           indicator: (eduData.value || []).map(d => ({
             name: d.education,
@@ -441,17 +466,17 @@ const updateCharts = () => {
           radius: '60%',
           center: ['50%', '55%'],
           splitNumber: 4,
-          axisName: { color: '#475569', fontSize: 10, fontWeight: 'bold' },
-          splitArea: { areaStyle: { color: ['rgba(241,245,249,0.5)', 'rgba(255,255,255,0.5)'] } },
-          splitLine: { lineStyle: { color: '#e2e8f0' } },
-          axisLine: { lineStyle: { color: '#e2e8f0' } }
+          axisName: { color: t.ink2, fontSize: 10, fontWeight: 'bold' },
+          splitArea: { areaStyle: { color: ['rgba(255,255,255,0.55)', 'rgba(255,255,255,0.30)'] } },
+          splitLine: { lineStyle: { color: t.border } },
+          axisLine: { lineStyle: { color: t.border } }
         },
         series: [{
           type: 'radar',
           data: [{ value: (eduData.value || []).map(d => d.avgSalary), name: '平均薪资(K)' }],
-          itemStyle: { color: '#8b5cf6', borderWidth: 2 },
-          lineStyle: { width: 2, color: '#8b5cf6' },
-          areaStyle: { color: 'rgba(139, 92, 246, 0.35)' },
+          itemStyle: { color: t.accent, borderWidth: 2 },
+          lineStyle: { width: 2, color: t.accent },
+          areaStyle: { color: 'rgba(255, 107, 74, 0.28)' },
           symbolSize: 6
         }]
       }
@@ -459,38 +484,48 @@ const updateCharts = () => {
     {
       instance: expChart,
       option: {
-        tooltip: { trigger: 'axis' },
+        tooltip: { trigger: 'axis', appendToBody: true, confine: true, extraCssText: 'z-index: 99999;' },
         xAxis: { type: 'category', data: expData.value.map(d => d.experience), boundaryGap: false },
         yAxis: { type: 'value' },
-        series: [{ type: 'line', smooth: true, data: expData.value.map(d => d.avgSalary), lineStyle: { width: 4, color: '#10b981' }, areaStyle: { color: new echarts.graphic.LinearGradient(0,0,0,1, [{offset:0, color:'rgba(16, 185, 129, 0.3)'},{offset:1, color:'transparent'}]) } }]
+        series: [{ type: 'line', smooth: true, data: expData.value.map(d => d.avgSalary), lineStyle: { width: 4, color: t.success }, areaStyle: { color: new echarts.graphic.LinearGradient(0,0,0,1, [{ offset: 0, color: 'rgba(22, 163, 74, 0.28)' }, { offset: 1, color: 'transparent' }]) } }]
       }
     },
     {
       instance: industryChart,
       option: {
-        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-        color: ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#22c55e', '#0ea5e9'],
+        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)', appendToBody: true, confine: true, extraCssText: 'z-index: 99999;' },
+        color: [
+          t.primary,
+          t.accent,
+          t.info,
+          t.success,
+          t.warning,
+          t.danger,
+          t.primary2,
+          'rgba(15, 118, 110, 0.55)',
+          'rgba(255, 107, 74, 0.55)',
+          'rgba(37, 99, 235, 0.55)'
+        ],
         legend: {
           type: 'scroll',
           orient: 'vertical',
           right: 0,
           top: 'middle',
-          textStyle: { fontSize: 11, color: '#475569' },
+          textStyle: { fontSize: 11, color: t.ink2 },
           itemWidth: 10,
           itemHeight: 10,
           formatter: function(name) {
             return name.length > 6 ? name.substring(0, 6) + '...' : name;
           }
         },
-        series: [{ 
-          type: 'pie', 
-          roseType: 'radius', 
-          radius: ['20%', '75%'], 
-          center: ['30%', '50%'], 
-          itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 }, 
-          label: { show: false }, 
+        series: [{
+          type: 'pie',
+          radius: ['48%', '74%'],
+          center: ['34%', '50%'],
+          itemStyle: { borderRadius: 6, borderColor: 'rgba(255,255,255,0.92)', borderWidth: 2 },
+          label: { show: false },
           labelLine: { show: false },
-          data: industryData.value.map(d => ({ name: d.industry, value: d.count })) 
+          data: industryData.value.map(d => ({ name: d.industry, value: d.count }))
         }]
       }
     },
@@ -502,7 +537,7 @@ const updateCharts = () => {
           sizeRange: [12, 45],
           rotationRange: [-45, 45],
           gridSize: 8,
-          textStyle: { fontFamily: 'sans-serif', fontWeight: 'bold', color: () => `hsl(${Math.random() * 360}, 70%, 60%)` },
+          textStyle: { fontFamily: 'IBM Plex Sans, sans-serif', fontWeight: 'bold', color: () => `hsl(${Math.random() * 360}, 64%, 54%)` },
           data: keywordData.value.map(d => ({ name: d.keyword, value: d.count }))
         }]
       }
@@ -510,11 +545,11 @@ const updateCharts = () => {
     {
       instance: skillBarChart,
       option: {
-        tooltip: { trigger: 'axis' },
+        tooltip: { trigger: 'axis', appendToBody: true, confine: true, extraCssText: 'z-index: 99999;' },
         grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
         xAxis: { type: 'value' },
         yAxis: { type: 'category', data: keywordData.value.slice(0, 10).reverse().map(d => d.keyword) },
-        series: [{ type: 'bar', data: keywordData.value.slice(0, 10).reverse().map(d => d.count), itemStyle: { color: new echarts.graphic.LinearGradient(0,0,1,0, [{offset:0, color:'#4f46e5'},{offset:1, color:'#7c3aed'}]) } }]
+        series: [{ type: 'bar', data: keywordData.value.slice(0, 10).reverse().map(d => d.count), itemStyle: { color: new echarts.graphic.LinearGradient(0,0,1,0, [{ offset: 0, color: t.primary }, { offset: 1, color: t.accent }]) }, barWidth: 14, emphasis: { focus: 'series' } }]
       }
     }
   ]
@@ -655,406 +690,60 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.dashboard {
-  padding: 18px 12px 28px;
-  background: radial-gradient(1200px 600px at 20% -10%, rgba(99, 102, 241, 0.12), transparent 60%),
-    radial-gradient(900px 500px at 90% 0%, rgba(16, 185, 129, 0.10), transparent 55%),
-    linear-gradient(180deg, #f8fafc 0%, #ffffff 60%, #ffffff 100%);
-}
+.cockpit-row { align-items: stretch; }
+.col-left, .col-main, .col-right { display: flex; flex-direction: column; gap: var(--space-5); }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+.bento-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.bento-stat-card { transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out); }
+.bento-stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md), var(--shadow-inset); }
+.bento-stat-card:first-child { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; }
+.bento-stat-card:first-child .stat-info { text-align: right; }
+.bento-stat-card:first-child .stat-value { font-size: 26px; }
+.stat-icon { width: 42px; height: 42px; border-radius: 16px; display: grid; place-items: center; font-size: 18px; }
+.blue .stat-icon { background: rgba(37, 99, 235, 0.12); color: var(--c-info); }
+.green .stat-icon { background: rgba(22, 163, 74, 0.12); color: var(--c-success); }
+.orange .stat-icon { background: rgba(245, 158, 11, 0.14); color: var(--c-warning); }
+.purple .stat-icon { background: rgba(15, 118, 110, 0.12); color: var(--c-primary-700); }
+.stat-value { font-size: 22px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1; }
+.stat-value small { font-size: 12px; color: var(--c-ink-3); margin-left: 6px; font-weight: 700; }
+.stat-label { font-size: 12px; color: var(--c-ink-3); font-weight: 700; margin-top: 4px; }
 
-/* 驾驶舱布局 (Bento-like 3 Column Layout) */
-.cockpit-layout {
-  max-width: 1600px;
-  margin: 0 auto;
-  animation: fadeIn 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
+.filter-form { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.filter-form :deep(.el-form-item) { margin: 0; }
+.filter-actions { margin-left: auto !important; }
 
-.cockpit-row {
-  display: flex;
-  align-items: stretch;
-}
+.action-panel { display: flex; gap: var(--space-3); }
+.action-btn { flex: 1; height: 56px; justify-content: center; font-weight: 800; }
 
-.col-left, .col-right {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
+.ai-drawer-content { padding: 0 var(--space-4) var(--space-4); }
+.card-header-box { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
+.title-group { display: inline-flex; align-items: center; gap: var(--space-2); }
+.icon-dot { width: 8px; height: 8px; border-radius: 50%; }
+.icon-dot.blue { background: var(--c-info); box-shadow: 0 0 10px rgba(37, 99, 235, 0.35); }
+.icon-dot.purple { background: var(--c-accent-500); box-shadow: 0 0 10px rgba(255, 107, 74, 0.35); }
+.title-text { font-weight: 800; color: var(--c-ink); }
 
-.col-main {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
+.cluster-visual { height: 420px; display: grid; place-items: center; border-radius: var(--radius-lg); background: rgba(255, 255, 255, 0.55); border: 1px dashed var(--c-border-2); overflow: hidden; }
+.cluster-img { max-width: 100%; max-height: 420px; border-radius: 14px; }
 
-/* Header */
-.brand-header {
-  margin-bottom: 8px;
-}
-.gradient-text {
-  font-size: 28px;
-  font-weight: 900;
-  background: linear-gradient(135deg, #1e293b 0%, #4f46e5 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  margin: 0 0 4px;
-}
-.subtitle {
-  color: #64748b;
-  font-size: 13px;
-  margin: 0;
-}
+.model-metrics { margin-bottom: var(--space-5); background: rgba(255, 255, 255, 0.55); padding: var(--space-5); border-radius: var(--radius-lg); border: 1px solid var(--c-border); }
+.metric-item { margin-bottom: var(--space-5); }
+.metric-item:last-child { margin-bottom: 0; }
+.metric-label { font-size: 13px; color: var(--c-ink-2); margin-bottom: 8px; font-weight: 800; display: flex; justify-content: space-between; gap: var(--space-3); }
 
-/* 核心指标网格 (Bento Box) */
-.bento-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-.bento-stat-card {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-  border: 1px solid #f1f5f9;
-  transition: all 0.3s;
-}
-.bento-stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
-}
-.stat-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-}
-.blue .stat-icon { background: #eff6ff; color: #3b82f6; }
-.green .stat-icon { background: #f0fdf4; color: #10b981; }
-.orange .stat-icon { background: #fff7ed; color: #f97316; }
-.purple .stat-icon { background: #faf5ff; color: #8b5cf6; }
+.sub-title { font-size: 14px; font-weight: 900; color: var(--c-ink); margin: var(--space-5) 0 var(--space-4); display: flex; align-items: center; gap: var(--space-2); }
+.sub-title.error { color: var(--c-danger); }
 
-.stat-value {
-  font-size: 22px;
-  font-weight: 800;
-  color: #1e293b;
-  line-height: 1.1;
-}
-.stat-value small { font-size: 12px; color: #94a3b8; margin-left: 4px; }
-.stat-label { font-size: 12px; color: #64748b; font-weight: 600; margin-top: 4px; }
+.token-cloud { display: flex; flex-wrap: wrap; gap: 10px; padding: var(--space-4); background: rgba(255, 255, 255, 0.55); border-radius: var(--radius-lg); border: 1px dashed var(--c-border); }
+.token-chip { background: rgba(255, 255, 255, 0.74); padding: 8px 12px; border-radius: 999px; font-size: 12px; color: var(--c-ink-2); font-weight: 800; border: 1px solid var(--c-border); }
+.token-count { color: var(--c-primary-700); margin-left: 6px; }
 
-/* 筛选舱 */
-.filter-cockpit {
-  padding: 3px 20px;
-  border-radius: 16px;
-  background: #ffffff;
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-  margin-bottom: 0;
-}
-.filter-form {
-  display: flex; 
-  flex-wrap: wrap;
-  gap: 12px;  
-  align-items: center;
-}
-.filter-form .el-form-item {
-  margin: 0;
-}
-.filter-actions {
-  margin-left: auto !important;
-}
+.error-list { background: rgba(220, 38, 38, 0.08); padding: var(--space-3); border-radius: var(--radius-md); font-size: 12px; color: var(--c-danger); }
+.error-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.error-item:last-child { margin-bottom: 0; }
 
-/* 操作面板 */
-.action-panel {
-  display: flex;
-  gap: 12px;
-}
-.action-btn {
-  flex: 1;
-  height: 70px;
-  justify-content: center;
-  font-weight: bold;
-}
-
-/* 通用图表卡片 */
-.glass-card {
-  border: 1px solid #f1f5f9;
-  border-radius: 16px;
-  background: #ffffff;
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
-  display: flex;
-  flex-direction: column;
-}
-:deep(.el-card__header) {
-  padding: 14px 20px;
-  border-bottom: 1px solid #f1f5f9;
-  font-weight: 700;
-  font-size: 14px;
-  color: #334155;
-}
-:deep(.el-card__body) {
-  padding: 16px;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-.chart-content {
-  height: 240px;
-  width: 100%;
-}
-.large-chart {
-  height: 380px;
-}
-.tab-chart {
-  height: 260px;
-}
-:deep(.dash-tabs .el-tabs__header) {
-  margin: 0 0 14px;
-}
-:deep(.dash-tabs .el-tabs__nav-wrap) {
-  padding: 4px;
-  background: #f1f5f9;
-  border-radius: 14px;
-}
-:deep(.dash-tabs .el-tabs__nav-wrap::after) {
-  display: none;
-}
-:deep(.dash-tabs .el-tabs__active-bar) {
-  display: none;
-}
-:deep(.dash-tabs .el-tabs__item) {
-  height: 34px;
-  line-height: 34px;
-  border-radius: 12px;
-  padding: 0 14px;
-  font-weight: 800;
-  color: #64748b;
-  transition: all 0.2s;
-}
-:deep(.dash-tabs .el-tabs__item:hover) {
-  color: #334155;
-}
-:deep(.dash-tabs .el-tabs__item.is-active) {
-  color: #1e293b;
-  background: #ffffff;
-  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
-}
-:deep(.dash-tabs .el-tabs__content) {
-  padding: 0;
-}
-
-.divider-text {
-  font-size: 14px;
-  font-weight: 700;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-/* AI 分析抽屉 */
-.ai-drawer-content {
-  padding: 0 20px 20px;
-}
-.drawer-card {
-  border: none;
-  background: #ffffff;
-  border-radius: 24px;
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-}
-
-.card-header-box {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.title-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.icon-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.icon-dot.blue { background: #3b82f6; box-shadow: 0 0 8px #3b82f6; }
-.icon-dot.purple { background: #a855f7; box-shadow: 0 0 8px #a855f7; }
-
-.title-text {
-  font-weight: 700;
-  color: #334155;
-}
-
-.cluster-visual {
-  height: 480px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f8fafc;
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  overflow: hidden;
-}
-
-.cluster-img {
-  max-width: 100%;
-  max-height: 480px;
-  border-radius: 12px;
-  transition: transform 0.3s;
-}
-
-.cluster-img:hover {
-  transform: scale(1.02);
-}
-
-.model-metrics {
-  margin-bottom: 24px;
-  background: #f8fafc;
-  padding: 20px;
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
-}
-
-.metric-item {
-  margin-bottom: 20px;
-}
-.metric-item:last-child {
-  margin-bottom: 0;
-}
-
-.metric-label {
-  font-size: 14px;
-  color: #475569;
-  margin-bottom: 8px;
-  font-weight: 700;
-  display: flex;
-  justify-content: space-between;
-}
-
-.sub-title {
-  font-size: 15px;
-  font-weight: 800;
-  color: #1e293b;
-  margin: 24px 0 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sub-title::before {
-  content: "";
-  display: block;
-  width: 4px;
-  height: 16px;
-  background: #6366f1;
-  border-radius: 2px;
-}
-
-.sub-title.error::before { background: #ef4444; }
-.sub-title.error { color: #ef4444; }
-
-.token-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 16px;
-  background: #ffffff;
-  border-radius: 16px;
-  border: 1px dashed #e2e8f0;
-}
-
-.token-chip {
-  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-  padding: 8px 14px;
-  border-radius: 12px;
-  font-size: 13px;
-  color: #334155;
-  font-weight: 700;
-  border: 1px solid #cbd5e1;
-  transition: all 0.2s;
-  cursor: default;
-}
-
-.token-chip:hover {
-  background: #4f46e5;
-  color: #ffffff;
-  border-color: #4f46e5;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
-}
-
-.token-chip:hover .token-count {
-  color: #e0e7ff;
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.token-count {
-  color: #4f46e5;
-  margin-left: 6px;
-  background: #ffffff;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 12px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-}
-
-.error-list {
-  background: #fef2f2;
-  padding: 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  color: #b91c1c;
-}
-
-.error-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
-}
-
-/* 筛选面板 */
-.filter-panel {
-  padding: 20px;
-  margin-bottom: 24px;
-}
-
-.filter-header {
-  font-size: 14px;
-  font-weight: 700;
-  color: #334155;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* 图表框 */
-.chart-box {
-  margin-bottom: 24px;
-}
-
-.chart-content {
-  height: 320px;
-}
-
-:deep(.el-card__header) {
-  border-bottom: 1px solid #f1f5f9;
-  padding: 16px 24px;
-  font-weight: 700;
-  color: #334155;
+@media (max-width: 640px) {
+  .bento-stats { grid-template-columns: 1fr; }
+  .action-panel { flex-direction: column; }
 }
 </style>

@@ -25,20 +25,25 @@ public class DatabaseInit implements CommandLineRunner {
             User user = new User();
             user.setUsername("admin");
             user.setPassword(passwordEncoder.encode("admin123"));
-            user.setRole("user");
+            user.setRole("admin");
             user.setCreateTime(LocalDateTime.now());
             userService.save(user);
             System.out.println("测试用户已创建: admin / admin123");
             return;
         }
 
+        boolean changed = false;
         if (!passwordEncoder.matches("admin123", admin.getPassword())) {
             admin.setPassword(passwordEncoder.encode("admin123"));
-            if (admin.getRole() == null) {
-                admin.setRole("user");
-            }
-            userService.updateById(admin);
+            changed = true;
             System.out.println("测试用户密码已重置: admin / admin123");
+        }
+        if (admin.getRole() == null || !"admin".equalsIgnoreCase(admin.getRole())) {
+            admin.setRole("admin");
+            changed = true;
+        }
+        if (changed) {
+            userService.updateById(admin);
         }
     }
 }

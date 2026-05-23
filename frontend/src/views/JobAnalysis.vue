@@ -1,26 +1,23 @@
 <template>
-  <div class="job-list-view" id="job-analysis-content">
-    <!-- 页面内容 -->
-    <div class="analysis-content">
-      <div class="page-header">
-        <div class="header-left">
-          <h1>💼 岗位分析</h1>
-          <p>多维筛选、实时搜索，深度洞察 {{ currentSourceText }} 招聘市场</p>
-        </div>
-        <div class="header-actions">
-          <el-button type="primary" plain @click="handleExportPDF" :loading="exportingPdf">
-            <el-icon><Document /></el-icon> 导出PDF
-          </el-button>
-          <el-button type="primary" @click="handleExport" :loading="exporting">
-            <el-icon><Download /></el-icon> 导出CSV
-          </el-button>
-        </div>
+  <div class="u-stack" id="job-analysis-content">
+    <div class="u-row u-row-start">
+      <div class="jd-page-head">
+        <div class="jd-page-head__title jd-page-head__title-text u-title">💼 岗位分析</div>
+        <div class="jd-page-head__desc">多维筛选、实时搜索，深度洞察 {{ currentSourceText }} 招聘市场</div>
       </div>
+      <div class="u-inline header-actions">
+        <el-button type="primary" plain @click="handleExportPDF" :loading="exportingPdf">
+          <el-icon><Document /></el-icon> 导出PDF
+        </el-button>
+        <el-button type="primary" @click="handleExport" :loading="exporting">
+          <el-icon><Download /></el-icon> 导出CSV
+        </el-button>
+      </div>
+    </div>
 
-      <div class="main-grid">
-        <!-- 筛选栏 -->
-        <el-card class="filter-card" shadow="never">
-          <el-form :model="filters" label-position="top">
+    <div class="main-grid">
+      <el-card class="filter-card" shadow="never">
+        <el-form :model="filters" label-position="top">
             <el-form-item label="岗位关键词">
               <el-input v-model="filters.keyword" placeholder="Java, Python, 前端..." prefix-icon="Search" clearable />
             </el-form-item>
@@ -50,10 +47,9 @@
               <el-button class="reset-btn" @click="handleReset">重置</el-button>
             </div>
           </el-form>
-        </el-card>
+      </el-card>
 
-        <!-- 数据表格 -->
-        <el-card class="table-card" shadow="never">
+      <el-card class="table-card" shadow="never">
           <div class="table-header">
             <div class="table-title">
               <span>📋 岗位列表</span>
@@ -113,8 +109,7 @@
               @current-change="handleCurrentChange"
             />
           </div>
-        </el-card>
-      </div>
+      </el-card>
     </div>
 
     <el-dialog v-model="descDialogVisible" :title="descDialogTitle" width="720px" custom-class="job-detail-dialog">
@@ -279,12 +274,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.job-list-view {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
 .header-actions {
   display: flex;
   gap: 12px;
@@ -299,7 +288,7 @@ onMounted(() => {
 
 .filter-card {
   position: sticky;
-  top: 100px;
+  top: 98px;
 }
 
 .filter-actions {
@@ -335,25 +324,25 @@ onMounted(() => {
 
 .job-info-cell .job-name {
   font-weight: 700;
-  color: #1e293b;
+  color: var(--c-ink);
   margin-bottom: 4px;
 }
 
 .job-info-cell .company-name {
   font-size: 13px;
-  color: #64748b;
+  color: var(--c-ink-3);
 }
 
 .salary-range {
   font-weight: 800;
-  color: #4f46e5;
+  color: var(--c-primary-700);
 }
 
 .city-tag {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: #64748b;
+  color: var(--c-ink-3);
 }
 
 .tags-cell {
@@ -374,7 +363,7 @@ onMounted(() => {
 
 .desc-text {
   line-height: 1.8;
-  color: #334155;
+  color: var(--c-ink-2);
   white-space: pre-wrap;
   margin-top: 12px;
 }
@@ -388,5 +377,10 @@ onMounted(() => {
 
 .external-link {
   font-weight: 600;
+}
+
+@media (max-width: 960px) {
+  .main-grid { grid-template-columns: 1fr; }
+  .filter-card { position: relative; top: 0; }
 }
 </style>

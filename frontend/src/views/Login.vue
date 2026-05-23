@@ -1,62 +1,70 @@
 
 <template>
-  <div class="login-container">
-    <div class="login-card">
-      <div class="login-header">
-        <div class="logo">
-          <el-icon :size="40"><DataAnalysis /></el-icon>
+  <div class="jd-auth">
+    <div class="jd-auth__card u-card u-card-pad">
+      <div class="jd-auth__head">
+        <div class="jd-auth__logo" aria-hidden="true">
+          <el-icon :size="28"><DataAnalysis /></el-icon>
         </div>
-        <h1>招聘数据可视化系统</h1>
-        <p>Job Data Visualization Platform</p>
+        <div class="jd-auth__titles">
+          <div class="u-title u-h2">招聘数据可视化系统</div>
+          <div class="u-text u-muted">Job Data Visualization Platform</div>
+        </div>
       </div>
 
+      <el-segmented v-model="mode" :options="modeOptions" size="large" class="jd-auth__seg" />
+
       <el-form
+        v-if="mode === 'login'"
         ref="loginFormRef"
         :model="loginForm"
         :rules="loginRules"
-        class="login-form"
         label-position="top"
+        class="jd-auth__form"
         @keyup.enter="handleLogin"
       >
         <el-form-item label="用户名" prop="username">
-          <el-input
-            v-model="loginForm.username"
-            placeholder="请输入用户名"
-            prefix-icon="User"
-            size="large"
-          />
+          <el-input v-model="loginForm.username" placeholder="请输入用户名" prefix-icon="User" size="large" />
         </el-form-item>
 
         <el-form-item label="密码" prop="password">
-          <el-input
-            v-model="loginForm.password"
-            type="password"
-            placeholder="请输入密码"
-            prefix-icon="Lock"
-            size="large"
-            show-password
-          />
+          <el-input v-model="loginForm.password" type="password" placeholder="请输入密码" prefix-icon="Lock" size="large" show-password />
         </el-form-item>
 
-        <el-form-item>
+        <div class="u-row u-row-between">
           <el-checkbox v-model="loginForm.remember" label="记住我" />
-        </el-form-item>
-
-        <el-form-item>
-          <el-button
-            type="primary"
-            size="large"
-            class="login-button"
-            :loading="loading"
-            @click="handleLogin"
-          >
-            {{ loading ? '登录中...' : '登录' }}
-          </el-button>
-        </el-form-item>
-
-        <div class="login-footer">
-          <span class="text-small">测试账号: admin / admin123</span>
+          <span class="jd-auth__hint">测试账号: admin / admin123</span>
         </div>
+
+        <el-button type="primary" size="large" class="jd-auth__btn" :loading="loading" @click="handleLogin">
+          {{ loading ? '登录中...' : '登录' }}
+        </el-button>
+      </el-form>
+
+      <el-form
+        v-else
+        ref="registerFormRef"
+        :model="registerForm"
+        :rules="registerRules"
+        label-position="top"
+        class="jd-auth__form"
+        @keyup.enter="handleRegister"
+      >
+        <el-form-item label="用户名" prop="username">
+          <el-input v-model="registerForm.username" placeholder="3-20位，仅字母/数字/下划线" prefix-icon="User" size="large" />
+        </el-form-item>
+
+        <el-form-item label="密码" prop="password">
+          <el-input v-model="registerForm.password" type="password" placeholder="至少8位，建议字母+数字" prefix-icon="Lock" size="large" show-password />
+        </el-form-item>
+
+        <el-form-item label="确认密码" prop="confirmPassword">
+          <el-input v-model="registerForm.confirmPassword" type="password" placeholder="再次输入密码" prefix-icon="Lock" size="large" show-password />
+        </el-form-item>
+
+        <el-button type="primary" size="large" class="jd-auth__btn" :loading="loading" @click="handleRegister">
+          {{ loading ? '提交中...' : '注册并返回登录' }}
+        </el-button>
       </el-form>
     </div>
   </div>
@@ -71,6 +79,13 @@ import api from '../api.js'
 
 const router = useRouter()
 const loginFormRef = ref(null)
+const registerFormRef = ref(null)
+
+const mode = ref('login')
+const modeOptions = [
+  { label: '登录', value: 'login' },
+  { label: '注册', value: 'register' }
+]
 
 const loginForm = reactive({
   username: '',
@@ -84,6 +99,38 @@ const loginRules = {
 }
 
 const loading = ref(false)
+
+const registerForm = reactive({
+  username: '',
+  password: '',
+  confirmPassword: ''
+})
+
+const validateUsername = (rule, value, callback) => {
+  const v = String(value || '').trim()
+  if (!v) return callback(new Error('请输入用户名'))
+  if (!/^[a-zA-Z0-9_]{3,20}$/.test(v)) return callback(new Error('3-20位，仅字母/数字/下划线'))
+  callback()
+}
+
+const validatePassword = (rule, value, callback) => {
+  const v = String(value || '')
+  if (!v) return callback(new Error('请输入密码'))
+  if (v.length < 8) return callback(new Error('密码至少8位'))
+  callback()
+}
+
+const validateConfirm = (rule, value, callback) => {
+  if (!value) return callback(new Error('请再次输入密码'))
+  if (value !== registerForm.password) return callback(new Error('两次密码不一致'))
+  callback()
+}
+
+const registerRules = {
+  username: [{ validator: validateUsername, trigger: 'blur' }],
+  password: [{ validator: validatePassword, trigger: 'blur' }],
+  confirmPassword: [{ validator: validateConfirm, trigger: 'blur' }]
+}
 
 const handleLogin = async () => {
   if (!loginFormRef.value) return
@@ -110,86 +157,41 @@ const handleLogin = async () => {
           ElMessage.error(res.data.message || '登录失败')
         }
       } catch (error) {
-        console.error(error)
-        ElMessage.error('登录失败，请稍后重试')
+        const msg = error?.response?.data?.message || error?.message || '登录失败，请稍后重试'
+        ElMessage.error(String(msg))
       } finally {
         loading.value = false
       }
     }
   })
 }
+
+const handleRegister = async () => {
+  if (!registerFormRef.value) return
+  await registerFormRef.value.validate(async (valid) => {
+    if (!valid) return
+    loading.value = true
+    try {
+      const res = await api.register({
+        username: String(registerForm.username || '').trim(),
+        password: registerForm.password
+      })
+      if (res.data.code === 200) {
+        ElMessage.success('注册成功，请登录')
+        loginForm.username = String(registerForm.username || '').trim()
+        loginForm.password = ''
+        registerForm.password = ''
+        registerForm.confirmPassword = ''
+        mode.value = 'login'
+      } else {
+        ElMessage.error(res.data.message || '注册失败')
+      }
+    } catch (error) {
+      const msg = error?.response?.data?.message || error?.message || '注册失败，请稍后重试'
+      ElMessage.error(String(msg))
+    } finally {
+      loading.value = false
+    }
+  })
+}
 </script>
-
-<style scoped>
-.login-container {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 20px;
-}
-
-.login-card {
-  width: 100%;
-  max-width: 420px;
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  padding: 40px 30px;
-}
-
-.login-header {
-  text-align: center;
-  margin-bottom: 40px;
-}
-
-.login-header .logo {
-  width: 64px;
-  height: 64px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 20px;
-  color: white;
-}
-
-.login-header h1 {
-  margin: 0 0 8px;
-  font-size: 24px;
-  color: #333;
-}
-
-.login-header p {
-  margin: 0;
-  color: #666;
-  font-size: 14px;
-}
-
-.login-form {
-  width: 100%;
-}
-
-.login-button {
-  width: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-}
-
-.login-button:hover {
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-}
-
-.login-footer {
-  text-align: center;
-  padding-top: 10px;
-}
-
-.text-small {
-  font-size: 13px;
-  color: #999;
-}
-</style>
-
