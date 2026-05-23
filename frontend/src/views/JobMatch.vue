@@ -48,6 +48,16 @@
                         </div>
                         <div class="job-card-reason" v-if="c.aiReason">{{ c.aiReason }}</div>
                         <div class="job-card-actions">
+                          <el-button
+                            size="small"
+                            :type="isFavoriteCard(c) ? 'warning' : 'default'"
+                            plain
+                            @click.stop="toggleFavoriteCard(c)"
+                            :loading="favoriteBusyKey === favoriteKeyOfCard(c)"
+                          >
+                            <el-icon><StarFilled v-if="isFavoriteCard(c)" /><Star v-else /></el-icon>
+                            {{ isFavoriteCard(c) ? '已收藏' : '收藏' }}
+                          </el-button>
                           <el-button type="primary" size="small" @click.stop="openJobDetail(c)">详情 <el-icon><View /></el-icon></el-button>
                         </div>
                       </el-card>
@@ -118,6 +128,7 @@
         <div class="card-header">
           <span>🧾 求职画像</span>
           <div class="u-inline u-gap-2">
+            <el-button type="success" size="small" :loading="savingProfile" @click="saveProfile(false)">保存</el-button>
             <el-upload
               action="#"
               :auto-upload="false"
@@ -294,10 +305,10 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onMounted, watch, inject } from 'vue'
 import api from '../api.js'
 import { ElMessage } from 'element-plus'
-import { Upload, RefreshLeft, Search, View, CopyDocument, TopRight, ArrowUp } from '@element-plus/icons-vue'
+import { Upload, RefreshLeft, Search, View, CopyDocument, TopRight, ArrowUp, Star, StarFilled } from '@element-plus/icons-vue'
 
 const cssVar = (name, fallback) => {
   if (typeof window === 'undefined') return fallback
@@ -333,6 +344,7 @@ const profileExtra = ref({
   links: []
 })
 const profileDrawerVisible = ref(false)
+const savingProfile = ref(false)
 
 const messages = ref([
   {
@@ -350,6 +362,15 @@ const matchingJobs = ref(false)
 const chatBodyRef = ref(null)
 const jobDetailVisible = ref(false)
 const selectedJob = ref(null)
+
+const userDataStore = inject('userDataStore', null)
+const favoriteBusyKey = userDataStore?.favoriteBusyKey || ref('')
+const favoriteKeyOfCard = (card) => `${String(card?.sourceTable || '').trim()}::${String(card?.job?.jobUrl || '').trim()}`
+const isFavoriteCard = (card) => userDataStore ? userDataStore.isFavorite(card?.sourceTable, card?.job?.jobUrl) : false
+const toggleFavoriteCard = (card) => {
+  if (!userDataStore) return
+  userDataStore.toggleFavorite({ sourceTable: card?.sourceTable, job: card?.job })
+}
 
 const scrollToBottom = async () => {
   await nextTick()
@@ -403,6 +424,9 @@ const sourceTagType = (sourceTable) => {
 
 const openJobDetail = (jobCard) => {
   selectedJob.value = jobCard || null
+  if (userDataStore && jobCard?.job) {
+    userDataStore.recordJobHistory(jobCard?.sourceTable, jobCard.job)
+  }
   jobDetailVisible.value = true
 }
 
@@ -710,6 +734,7 @@ const handleResumeUpload = async (file) => {
       notes: data.notes || profile.value.notes
     }
     ElMessage.success('简历解析成功，已自动填充求职画像')
+    await saveProfile(true)
     
     // 自动追加一条提示消息
     await pushAssistantText('我已经提取了你简历中的关键信息并填入左侧画像，你可以检查或修改它。建议你现在点击“匹配岗位”让我按你的画像推荐岗位。')
@@ -719,6 +744,51 @@ const handleResumeUpload = async (file) => {
     ElMessage.error('简历解析异常: ' + (backendMessage || e.message || '网络或服务端错误'))
   } finally {
     parsingResume.value = false
+  }
+}
+
+const loadProfile = async (silent) => {
+  try {
+    const res = await api.getUserProfile()
+    if (res.data.code !== 200) throw new Error(res.data.message || '加载画像失败')
+    const data = res.data.data || {}
+    const p = data.profile || {}
+    profile.value = {
+      targetRole: p.targetRole || '',
+      city: p.city || '',
+      education: p.education || '',
+      experience: p.experience || '',
+      skills: p.skills || '',
+      notes: p.notes || ''
+    }
+    resumeMeta.value = data.resumeMeta || null
+    const extra = data.profileExtra || {}
+    profileExtra.value = {
+      highlights: Array.isArray(extra.highlights) ? extra.highlights : [],
+      workExperiences: Array.isArray(extra.workExperiences) ? extra.workExperiences : [],
+      projects: Array.isArray(extra.projects) ? extra.projects : [],
+      certifications: Array.isArray(extra.certifications) ? extra.certifications : [],
+      links: Array.isArray(extra.links) ? extra.links : []
+    }
+  } catch (e) {
+    if (!silent) ElMessage.error(String(e?.message || '加载画像失败'))
+  }
+}
+
+const saveProfile = async (silent) => {
+  savingProfile.value = true
+  try {
+    const res = await api.saveUserProfile({
+      profile: { ...profile.value },
+      resumeMeta: resumeMeta.value,
+      profileExtra: profileExtra.value
+    })
+    if (res.data.code !== 200) throw new Error(res.data.message || '保存失败')
+    if (!silent) ElMessage.success('已保存')
+  } catch (e) {
+    if (!silent) ElMessage.error(String(e?.message || '保存失败'))
+  } finally {
+    savingProfile.value = false
   }
 }
 
@@ -773,6 +843,16 @@ const handleSend = async () => {
     sending.value = false
   }
 }
+
+onMounted(async () => {
+  await loadProfile(true)
+})
+
+watch(profileDrawerVisible, async (v) => {
+  if (v) {
+    await loadProfile(true)
+  }
+})
 </script>
 
 <style scoped>

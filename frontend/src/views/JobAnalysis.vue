@@ -91,8 +91,17 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="详情" width="100" fixed="right">
+            <el-table-column label="操作" width="160" fixed="right">
               <template #default="{ row }">
+                <el-button
+                  :type="isFavoriteRow(row) ? 'warning' : 'default'"
+                  link
+                  @click="toggleFavoriteRow(row)"
+                  :loading="favoriteBusyKey === favoriteKeyOfRow(row)"
+                >
+                  <el-icon><StarFilled v-if="isFavoriteRow(row)" /><Star v-else /></el-icon>
+                  {{ isFavoriteRow(row) ? '已收藏' : '收藏' }}
+                </el-button>
                 <el-button type="primary" link @click="openDesc(row)">查看详情</el-button>
               </template>
             </el-table-column>
@@ -130,9 +139,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, inject } from 'vue'
 import { useRoute } from 'vue-router'
-import { Search, RefreshLeft, Download, Document, Location, TopRight } from '@element-plus/icons-vue'
+import { Search, RefreshLeft, Download, Document, Location, TopRight, Star, StarFilled } from '@element-plus/icons-vue'
 import api from '../api.js'
 import { ElMessage } from 'element-plus'
 import { exportToPDFMultiPage } from '../utils/exportPdf.js'
@@ -140,6 +149,16 @@ import { exportToPDFMultiPage } from '../utils/exportPdf.js'
 const route = useRoute()
 const currentSource = computed(() => route.meta?.source || 'boss')
 const currentSourceText = computed(() => currentSource.value === '51job' ? '前程无忧' : 'BOSS直聘')
+const sourceTable = computed(() => currentSource.value === '51job' ? 'job_info_51job' : 'job_info')
+
+const userDataStore = inject('userDataStore', null)
+const favoriteBusyKey = userDataStore?.favoriteBusyKey || ref('')
+const favoriteKeyOfRow = (row) => `${String(sourceTable.value || '').trim()}::${String(row?.jobUrl || '').trim()}`
+const isFavoriteRow = (row) => userDataStore ? userDataStore.isFavorite(sourceTable.value, row?.jobUrl) : false
+const toggleFavoriteRow = (row) => {
+  if (!userDataStore) return
+  userDataStore.toggleFavorite({ sourceTable: sourceTable.value, job: row })
+}
 
 const loading = ref(false)
 const exporting = ref(false)
@@ -228,6 +247,9 @@ const handleCurrentChange = (val) => {
 }
 
 const openDesc = (row) => {
+  if (userDataStore && row) {
+    userDataStore.recordJobHistory(sourceTable.value, row)
+  }
   descDialogTitle.value = row.jobName
   descDialogContent.value = row.jobDesc || '暂无详细描述'
   descDialogUrl.value = row.jobUrl
@@ -236,8 +258,13 @@ const openDesc = (row) => {
 
 const normalizeJobUrl = (url) => {
   if (!url) return '#'
-  if (url.startsWith('http')) return url
-  return `https://${url}`
+  const t = String(url).trim()
+  if (!t) return '#'
+  if (t.startsWith('http://') || t.startsWith('https://')) return t
+  if (t.startsWith('//')) return `https:${t}`
+  if (t.startsWith('/job_detail/')) return `https://www.zhipin.com${t}`
+  if (t.startsWith('/')) return `https://jobs.51job.com${t}`
+  return `https://${t}`
 }
 
 const copyUrl = (url) => {

@@ -3,10 +3,15 @@ package com.jobdata.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.jobdata.dto.*;
 import com.jobdata.entity.JobInfo;
+import com.jobdata.entity.UserMatchHistory;
 import com.jobdata.service.JobInfoService;
+import com.jobdata.service.UserMatchHistoryService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +23,10 @@ public class JobInfoController {
 
     @Autowired
     private JobInfoService jobInfoService;
+    @Autowired
+    private UserMatchHistoryService userMatchHistoryService;
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @GetMapping("/page")
     public Result<Page<JobInfo>> pageQuery(
@@ -117,8 +126,30 @@ public class JobInfoController {
     }
 
     @PostMapping("/match/jobs")
-    public Result<List<JobMatchDTO>> matchJobs(@RequestBody JobMatchRequest request) {
-        return Result.success(jobInfoService.matchJobs(request));
+    public Result<List<JobMatchDTO>> matchJobs(Authentication authentication, @RequestBody JobMatchRequest request) {
+        List<JobMatchDTO> list = jobInfoService.matchJobs(request);
+
+        if (authentication != null && authentication.getPrincipal() instanceof Long) {
+            Long userId = (Long) authentication.getPrincipal();
+            UserMatchHistory row = new UserMatchHistory();
+            row.setUserId(userId);
+            row.setTargetRole(request != null ? request.getTargetRole() : null);
+            row.setCity(request != null ? request.getCity() : null);
+            row.setCreatedAt(LocalDateTime.now());
+            try {
+                row.setProfileJson(objectMapper.writeValueAsString(request));
+            } catch (Exception e) {
+                row.setProfileJson(null);
+            }
+            try {
+                row.setResultJson(objectMapper.writeValueAsString(list));
+            } catch (Exception e) {
+                row.setResultJson(null);
+            }
+            userMatchHistoryService.save(row);
+        }
+
+        return Result.success(list);
     }
 
 }

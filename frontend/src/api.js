@@ -162,6 +162,42 @@ export default {
     return api.get('/user/info')
   },
 
+  getUserProfile() {
+    return api.get('/user/profile')
+  },
+
+  saveUserProfile(data) {
+    return api.put('/user/profile', data)
+  },
+
+  listFavorites() {
+    return api.get('/user/favorites')
+  },
+
+  addFavorite(data) {
+    return api.post('/user/favorites', data)
+  },
+
+  removeFavorite(params) {
+    return api.delete('/user/favorites', { params })
+  },
+
+  listMatchHistory(params = {}) {
+    return api.get('/user/match-history', { params })
+  },
+
+  getMatchHistoryDetail(id) {
+    return api.get(`/user/match-history/${id}`)
+  },
+
+  listJobHistory(params = {}) {
+    return api.get('/user/job-history', { params })
+  },
+
+  recordJobHistory(data) {
+    return api.post('/user/job-history', data)
+  },
+
   careerChat(data) {
     return api.post('/ai/career-chat', data, { timeout: 60000 })
   },
