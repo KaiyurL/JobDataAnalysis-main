@@ -95,6 +95,10 @@ export default {
     return api.post('/jobs/match/jobs', data, { timeout: 60000 })
   },
 
+  searchJobs(data) {
+    return api.post('/jobs/search', data, { timeout: 60000 })
+  },
+
   getAllSkills() {
     return api.get('/jobs/skills')
   },

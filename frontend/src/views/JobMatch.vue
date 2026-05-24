@@ -481,6 +481,7 @@ const buildHistoryPayload = () => {
 }
 
 const JOB_RECO_MARKER = '__JOB_RECO_JSON__'
+const TOOL_CALL_MARKER = '__TOOL_CALL__'
 
 const callCareerChat = async (payloadText) => {
   const res = await api.careerChat({
@@ -512,6 +513,94 @@ const stripRecoMarker = (reply) => {
   const idx = raw.indexOf(JOB_RECO_MARKER)
   if (idx < 0) return raw.trim()
   return raw.substring(0, idx).trim()
+}
+
+const extractToolCall = (reply) => {
+  const raw = String(reply || '')
+  const idx = raw.indexOf(TOOL_CALL_MARKER)
+  if (idx < 0) return null
+  const after = raw.substring(idx + TOOL_CALL_MARKER.length)
+  const start = after.indexOf('{')
+  const end = after.lastIndexOf('}')
+  if (start < 0 || end < 0 || end <= start) return null
+  const jsonPart = after.substring(start, end + 1).trim()
+  try {
+    const obj = JSON.parse(jsonPart)
+    if (!obj || typeof obj !== 'object') return null
+    if (typeof obj.tool !== 'string') return null
+    return obj
+  } catch {
+    return null
+  }
+}
+
+const buildToolCandidatesText = (list, limit = 10) => {
+  if (!Array.isArray(list) || list.length === 0) return ''
+  return buildCandidateLines(list, limit)
+}
+
+const callCareerChatWithTools = async (userText) => {
+  const maxTurns = 2
+  let currentText = `${userText}\n\n如果需要检索岗位数据库，请按工具调用协议输出 ${TOOL_CALL_MARKER}。`
+  let lastToolList = null
+  for (let t = 0; t < maxTurns; t++) {
+    const reply = await callCareerChat(currentText)
+    const toolCall = extractToolCall(reply)
+    if (!toolCall) {
+      if (lastToolList && Array.isArray(lastToolList) && lastToolList.length) {
+        const candidateCards = buildCandidateCards(lastToolList, 10)
+        const reco = extractRecoJson(reply)
+        const pureText = stripRecoMarker(reply)
+        const cards = reco ? toCardsFromReco(candidateCards, reco) : candidateCards.slice(0, 5).map(c => ({ ...c, aiReason: '' }))
+        return { text: pureText || '已完成推荐。', cards, cardsTitle: '检索岗位（卡片可点开详情）' }
+      }
+      return { text: reply, cards: null, cardsTitle: '' }
+    }
+
+    const tool = String(toolCall.tool || '').trim()
+    const args = toolCall.args && typeof toolCall.args === 'object' ? toolCall.args : {}
+    if (tool !== 'job_search') {
+      return { text: '当前工具调用不支持，请换一种说法或直接告诉我你想要的岗位条件（来源/城市/薪资/关键词）。', cards: null, cardsTitle: '' }
+    }
+
+    let source = String(args.source || '').trim().toLowerCase()
+    if (source === '51job') source = '51job'
+    else if (source === 'boss') source = 'boss'
+    else source = 'all'
+
+    const minSalaryK = args.minSalaryK == null ? null : Number(args.minSalaryK)
+    const maxSalaryK = args.maxSalaryK == null ? null : Number(args.maxSalaryK)
+
+    const res = await api.searchJobs({
+      source,
+      keyword: args.keyword || '',
+      city: args.city || '',
+      education: args.education || '',
+      experience: args.experience || '',
+      company: args.company || '',
+      minSalaryK: Number.isFinite(minSalaryK) ? Math.max(0, Math.floor(minSalaryK)) : undefined,
+      maxSalaryK: Number.isFinite(maxSalaryK) ? Math.max(0, Math.floor(maxSalaryK)) : undefined,
+      limit: args.limit == null ? 10 : Math.max(1, Math.min(10, Math.floor(Number(args.limit) || 10)))
+    })
+    if (res.data.code !== 200) {
+      throw new Error(res.data.message || '岗位检索失败')
+    }
+    const list = res.data.data || []
+    lastToolList = list
+    const candidatesText = buildToolCandidatesText(list, 10)
+
+    currentText =
+      `用户需求：${userText}\n\n` +
+      `工具 job_search 从数据库返回候选岗位如下：\n` +
+      `${candidatesText || '(无结果)'}\n\n` +
+      `请基于候选岗位给出最终推荐（不要再输出 ${TOOL_CALL_MARKER}）。\n` +
+      `请按以下格式输出：先给出 3-6 行中文总结，然后在最后一行输出 ${JOB_RECO_MARKER} 后紧跟一个 JSON（不要用代码块）。\n` +
+      `JSON 结构示例：{"picks":[{"index":3,"reason":"...","gap":"...","next":"..."}]}\n` +
+      `其中 index 必须是候选列表的编号（1-10），最多给 5 个。\n\n` +
+      `如果无结果，请告诉我应该如何放宽条件，并给出下一步可执行的检索建议（不要输出 ${JOB_RECO_MARKER}）。`
+  }
+  const reply = await callCareerChat(currentText)
+  return { text: reply, cards: null, cardsTitle: '' }
 }
 
 const pushUserText = async (text) => {
@@ -831,8 +920,11 @@ const handleSend = async () => {
 
   sending.value = true
   try {
-    const reply = await callCareerChat(content)
-    await pushAssistantText(reply || '未返回内容')
+    const out = await callCareerChatWithTools(content)
+    await pushAssistantText(out?.text || '未返回内容')
+    if (Array.isArray(out?.cards) && out.cards.length > 0) {
+      await pushAssistantJobCards(out.cardsTitle || '推荐岗位（卡片可点开详情）', out.cards)
+    }
   } catch (e) {
     console.error(e)
     const backendMessage = e?.response?.data?.message

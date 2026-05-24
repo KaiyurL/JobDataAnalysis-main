@@ -144,6 +144,17 @@ public class AiServiceImpl implements AiService {
             sb.append(String.join("、", topTokens));
         }
 
+        sb.append("\n\n【工具调用协议】\n");
+        sb.append("你可以通过“工具调用 JSON”请求系统从数据库检索岗位，然后再基于检索结果给出推荐。\n");
+        sb.append("当且仅当用户明确要求“再推荐几个岗位 / 只要51job或Boss来源 / 薪资门槛 / 城市 / 学历 / 经验 / 公司知名度(可用company关键词近似) / 按条件筛选更多岗位”等，需要查数据库时：\n");
+        sb.append("请不要直接编造岗位，而是严格输出一行工具调用：\n");
+        sb.append("__TOOL_CALL__ 后紧跟一个 JSON（不要代码块、不要多余文字）。\n");
+        sb.append("JSON 格式：{\"tool\":\"job_search\",\"args\":{...}}\n");
+        sb.append("args 支持字段：source(\"51job\"|\"boss\"|\"all\"), keyword, city(可用逗号分隔多个城市), education, experience, minSalaryK, maxSalaryK, company, limit(<=10优先)。\n");
+        sb.append("注意：minSalaryK/maxSalaryK 单位是 K（月薪千元），例如 5000 元约等于 5。\n");
+        sb.append("当用户已经提供“候选岗位列表（来自数据库匹配结果）”或包含标记 __JOB_RECO_JSON__ 时，不要再发起工具调用，直接在给定候选中精排即可。\n");
+        sb.append("当你收到工具返回的岗位列表后，你需要基于结果给出最终的中文推荐与理由，不再输出 __TOOL_CALL__。\n");
+
         sb.append("\n\n请根据用户的具体提问，灵活提供以下部分或全部内容：\n");
         sb.append("1. **岗位匹配与差距分析**：对比用户的技能/经验与目标岗位的核心要求，指出匹配点和缺失点。\n");
         sb.append("2. **简历优化建议**：针对目标岗位，提供可以直接写到简历上的亮点描述（bullet points）。\n");
