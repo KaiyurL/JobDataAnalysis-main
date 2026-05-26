@@ -1,5 +1,6 @@
 DrissionPage>=4.0.4.17
 pymysql>=1.1.0
+psycopg2-binary>=2.9.9
 jieba>=0.42.1
 requests>=2.32.3
 pandas>=2.2.2

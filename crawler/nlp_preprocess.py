@@ -7,7 +7,7 @@ from typing import Dict, Iterable, List, Optional, Sequence
 
 import jieba
 import pandas as pd
-import pymysql
+import psycopg2
 
 
 @dataclass(frozen=True)
@@ -21,7 +21,7 @@ class DbConfig:
     charset: str = "utf8mb4"
 
     def to_pymysql_kwargs(self) -> Dict[str, object]:
-        """将配置转为 pymysql.connect 可接受的关键字参数字典，缺失必填字段时抛出 RuntimeError。"""
+        """将配置转为数据库连接库可接受的关键字参数字典（当前用于 psycopg2.connect），缺失必填字段时抛出 RuntimeError。"""
         if not str(self.host or "").strip():
             raise RuntimeError("缺少数据库配置: host")
         if not int(self.port or 0):
@@ -37,14 +37,13 @@ class DbConfig:
             "port": int(self.port),
             "user": self.user,
             "password": self.password,
-            "database": self.database,
-            "charset": self.charset,
+            "dbname": self.database,
         }
 
 
 def connect_mysql(cfg: DbConfig):
-    """使用 DbConfig 建立 pymysql 数据库连接并返回连接对象。"""
-    return pymysql.connect(**cfg.to_pymysql_kwargs())
+    """使用 DbConfig 建立数据库连接并返回连接对象。"""
+    return psycopg2.connect(**cfg.to_pymysql_kwargs())
 
 
 def read_jobs_from_mysql(

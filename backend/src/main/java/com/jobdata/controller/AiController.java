@@ -7,6 +7,7 @@ import com.jobdata.service.AiService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -20,9 +21,10 @@ public class AiController {
     private AiService aiService;
 
     @PostMapping("/career-chat")
-    public Result<AiChatResponse> careerChat(@RequestBody AiChatRequest request) {
+    public Result<AiChatResponse> careerChat(Authentication authentication, @RequestBody AiChatRequest request) {
         try {
-            return Result.success(aiService.careerChat(request));
+            Long userId = authentication != null && authentication.getPrincipal() instanceof Long ? (Long) authentication.getPrincipal() : null;
+            return Result.success(aiService.careerChat(request, userId));
         } catch (Exception e) {
             log.error("AI career-chat failed: {}", e.getMessage(), e);
             return Result.error("AI 建议生成失败: " + e.getMessage());

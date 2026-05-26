@@ -1,11 +1,11 @@
 {
   "db": {
     "host": "localhost",
-    "port": 3306,
-    "user": "root",
+    "port": 5432,
+    "user": "postgres",
     "password": "123456ppoo",
     "database": "job_data",
-    "charset": "utf8mb4"
+    "type": "postgres"
   },
   "browser": {
     "preferred": "auto",

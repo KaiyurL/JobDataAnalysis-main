@@ -64,6 +64,35 @@
                     </el-col>
                   </el-row>
                 </div>
+                <div v-else-if="m.kind === 'citations'" class="citations">
+                  <div class="citations-header">{{ m.title || '参考资料（RAG）' }}</div>
+                  <div v-if="!m.citations || !m.citations.length" class="citations-empty">暂无</div>
+                  <div v-else class="citations-list">
+                    <div v-for="(c, i) in m.citations" :key="`c_${m.id}_${i}`" class="citation-item">
+                      <div class="citation-title-row">
+                        <div class="citation-title">
+                          {{ (c && (c.title || c.job_name || c.jobName)) || `参考片段 ${i + 1}` }}
+                        </div>
+                        <a
+                          v-if="citationUrlOf(c)"
+                          class="citation-link"
+                          :href="citationUrlOf(c)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          打开
+                        </a>
+                      </div>
+                      <div class="citation-meta">
+                        <span v-if="c && (c.source || c.source_table || c.sourceTable)">{{ c.source || c.source_table || c.sourceTable }}</span>
+                        <span v-if="c && (c.job_id || c.jobId)"> · {{ c.job_id || c.jobId }}</span>
+                      </div>
+                      <div v-if="c && (c.snippet || c.text)" class="citation-snippet">
+                        {{ c.snippet || c.text }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <div v-else class="chat-content" v-html="formatContent(m.content)"></div>
               </div>
             </div>
@@ -398,6 +427,13 @@ const normalizeJobUrl = (url) => {
   return `https://${t}`
 }
 
+const citationUrlOf = (c) => {
+  if (!c || typeof c !== 'object') return ''
+  const u = c.job_url || c.jobUrl || c.url || c.link || ''
+  const normalized = normalizeJobUrl(u)
+  return normalized && normalized !== '#' ? normalized : ''
+}
+
 const canOpenUrl = (url) => {
   const u = normalizeJobUrl(url)
   return u && u !== '#'
@@ -480,127 +516,93 @@ const buildHistoryPayload = () => {
     .map(m => ({ role: m.role, content: m.content }))
 }
 
-const JOB_RECO_MARKER = '__JOB_RECO_JSON__'
-const TOOL_CALL_MARKER = '__TOOL_CALL__'
-
-const callCareerChat = async (payloadText) => {
-  const res = await api.careerChat({
-    profile: { ...profile.value },
-    message: payloadText,
-    history: buildHistoryPayload()
-  })
-  if (res.data.code !== 200) {
-    throw new Error(res.data.message || '请求失败')
-  }
-  return res.data.data?.reply || ''
-}
-
-const extractRecoJson = (reply) => {
-  const raw = String(reply || '')
-  const idx = raw.indexOf(JOB_RECO_MARKER)
-  if (idx < 0) return null
-  const jsonPart = raw.substring(idx + JOB_RECO_MARKER.length).trim()
-  if (!jsonPart) return null
-  try {
-    return JSON.parse(jsonPart)
-  } catch (e) {
-    return null
-  }
-}
-
-const stripRecoMarker = (reply) => {
-  const raw = String(reply || '')
-  const idx = raw.indexOf(JOB_RECO_MARKER)
-  if (idx < 0) return raw.trim()
-  return raw.substring(0, idx).trim()
-}
-
-const extractToolCall = (reply) => {
-  const raw = String(reply || '')
-  const idx = raw.indexOf(TOOL_CALL_MARKER)
-  if (idx < 0) return null
-  const after = raw.substring(idx + TOOL_CALL_MARKER.length)
-  const start = after.indexOf('{')
-  const end = after.lastIndexOf('}')
-  if (start < 0 || end < 0 || end <= start) return null
-  const jsonPart = after.substring(start, end + 1).trim()
-  try {
-    const obj = JSON.parse(jsonPart)
-    if (!obj || typeof obj !== 'object') return null
-    if (typeof obj.tool !== 'string') return null
-    return obj
-  } catch {
-    return null
-  }
-}
-
-const buildToolCandidatesText = (list, limit = 10) => {
-  if (!Array.isArray(list) || list.length === 0) return ''
-  return buildCandidateLines(list, limit)
-}
-
-const callCareerChatWithTools = async (userText) => {
-  const maxTurns = 2
-  let currentText = `${userText}\n\n如果需要检索岗位数据库，请按工具调用协议输出 ${TOOL_CALL_MARKER}。`
-  let lastToolList = null
-  for (let t = 0; t < maxTurns; t++) {
-    const reply = await callCareerChat(currentText)
-    const toolCall = extractToolCall(reply)
-    if (!toolCall) {
-      if (lastToolList && Array.isArray(lastToolList) && lastToolList.length) {
-        const candidateCards = buildCandidateCards(lastToolList, 10)
-        const reco = extractRecoJson(reply)
-        const pureText = stripRecoMarker(reply)
-        const cards = reco ? toCardsFromReco(candidateCards, reco) : candidateCards.slice(0, 5).map(c => ({ ...c, aiReason: '' }))
-        return { text: pureText || '已完成推荐。', cards, cardsTitle: '检索岗位（卡片可点开详情）' }
-      }
-      return { text: reply, cards: null, cardsTitle: '' }
-    }
-
-    const tool = String(toolCall.tool || '').trim()
-    const args = toolCall.args && typeof toolCall.args === 'object' ? toolCall.args : {}
-    if (tool !== 'job_search') {
-      return { text: '当前工具调用不支持，请换一种说法或直接告诉我你想要的岗位条件（来源/城市/薪资/关键词）。', cards: null, cardsTitle: '' }
-    }
-
-    let source = String(args.source || '').trim().toLowerCase()
-    if (source === '51job') source = '51job'
-    else if (source === 'boss') source = 'boss'
-    else source = 'all'
-
-    const minSalaryK = args.minSalaryK == null ? null : Number(args.minSalaryK)
-    const maxSalaryK = args.maxSalaryK == null ? null : Number(args.maxSalaryK)
-
-    const res = await api.searchJobs({
-      source,
-      keyword: args.keyword || '',
-      city: args.city || '',
-      education: args.education || '',
-      experience: args.experience || '',
-      company: args.company || '',
-      minSalaryK: Number.isFinite(minSalaryK) ? Math.max(0, Math.floor(minSalaryK)) : undefined,
-      maxSalaryK: Number.isFinite(maxSalaryK) ? Math.max(0, Math.floor(maxSalaryK)) : undefined,
-      limit: args.limit == null ? 10 : Math.max(1, Math.min(10, Math.floor(Number(args.limit) || 10)))
+const callAgentChatStream = async (userText, onDelta, onEnd) => {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token') || ''
+  const res = await fetch('/api/agent/chat/stream', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({
+      profile: { ...profile.value },
+      message: userText,
+      history: buildHistoryPayload()
     })
-    if (res.data.code !== 200) {
-      throw new Error(res.data.message || '岗位检索失败')
-    }
-    const list = res.data.data || []
-    lastToolList = list
-    const candidatesText = buildToolCandidatesText(list, 10)
-
-    currentText =
-      `用户需求：${userText}\n\n` +
-      `工具 job_search 从数据库返回候选岗位如下：\n` +
-      `${candidatesText || '(无结果)'}\n\n` +
-      `请基于候选岗位给出最终推荐（不要再输出 ${TOOL_CALL_MARKER}）。\n` +
-      `请按以下格式输出：先给出 3-6 行中文总结，然后在最后一行输出 ${JOB_RECO_MARKER} 后紧跟一个 JSON（不要用代码块）。\n` +
-      `JSON 结构示例：{"picks":[{"index":3,"reason":"...","gap":"...","next":"..."}]}\n` +
-      `其中 index 必须是候选列表的编号（1-10），最多给 5 个。\n\n` +
-      `如果无结果，请告诉我应该如何放宽条件，并给出下一步可执行的检索建议（不要输出 ${JOB_RECO_MARKER}）。`
+  })
+  if (!res.ok) {
+    throw new Error(`请求失败(${res.status})`)
   }
-  const reply = await callCareerChat(currentText)
-  return { text: reply, cards: null, cardsTitle: '' }
+  if (!res.body) {
+    throw new Error('当前浏览器不支持流式响应')
+  }
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let buffer = ''
+  const flushBlock = (block) => {
+    const lines = block.split('\n')
+    const dataLines = []
+    for (const line of lines) {
+      if (line.startsWith('data:')) {
+        dataLines.push(line.slice(5).trim())
+      }
+    }
+    if (dataLines.length === 0) return
+    const dataStr = dataLines.join('\n')
+    let obj = null
+    try {
+      obj = JSON.parse(dataStr)
+    } catch {
+      return
+    }
+    if (!obj || typeof obj !== 'object') return
+    if (obj.type === 'delta') {
+      onDelta?.(String(obj.text || ''))
+    } else if (obj.type === 'end') {
+      onEnd?.(obj.payload || {})
+    }
+  }
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let idx
+    while ((idx = buffer.indexOf('\n\n')) >= 0) {
+      const block = buffer.slice(0, idx)
+      buffer = buffer.slice(idx + 2)
+      if (block.trim()) flushBlock(block)
+    }
+  }
+  if (buffer.trim()) flushBlock(buffer)
+}
+
+const mapAgentJobCards = (cards) => {
+  if (!Array.isArray(cards) || cards.length === 0) return []
+  const out = []
+  for (let i = 0; i < cards.length; i++) {
+    const c = cards[i] || {}
+    const source = String(c.source || '').toLowerCase()
+    const sourceTable = source === '51job' ? 'job_info_51job' : 'job_info'
+    const job = {
+      id: c.id,
+      jobName: c.jobName,
+      companyName: c.companyName,
+      city: c.city,
+      jobUrl: c.jobUrl,
+      salaryMin: c.salaryMin,
+      salaryMax: c.salaryMax,
+      salaryAvg: c.salaryAvg,
+      experience: c.experience,
+      education: c.education
+    }
+    out.push({
+      index: i + 1,
+      key: `${sourceTable}::${job.jobUrl || job.id || i}`,
+      job,
+      sourceTable
+    })
+  }
+  return out
 }
 
 const pushUserText = async (text) => {
@@ -625,21 +627,16 @@ const pushAssistantJobCards = async (title, cards) => {
   await scrollToBottom()
 }
 
-const sendToAI = async (displayText, payloadText) => {
-  await pushUserText(displayText)
-  sending.value = true
-  try {
-    const reply = await callCareerChat(payloadText)
-    await pushAssistantText(reply)
-  } catch (e) {
-    console.error(e)
-    const backendMessage = e?.response?.data?.message
-    const errorMessage = backendMessage || e?.message || 'AI 生成失败，请检查后端和百炼配置'
-    ElMessage.error(String(errorMessage))
-    await pushAssistantText('当前无法生成建议，请稍后重试。')
-  } finally {
-    sending.value = false
-  }
+const pushAssistantCitations = async (title, citations) => {
+  if (!Array.isArray(citations) || citations.length === 0) return
+  messages.value.push({
+    id: `s_${Date.now()}`,
+    role: 'assistant',
+    kind: 'citations',
+    title,
+    citations: citations.slice(0, 8)
+  })
+  await scrollToBottom()
 }
 
 const buildCandidateLines = (list, limit = 8) => {
@@ -671,42 +668,6 @@ const buildCandidateCards = (list, limit = 10) => {
     })
   }
   return out
-}
-
-const pickIndex = (p) => {
-  const v = p?.index ?? p?.idx ?? p?.pick ?? p?.choice ?? p?.rankIndex
-  const n = Number(v)
-  return Number.isFinite(n) ? n : NaN
-}
-
-const toCardsFromReco = (candidates, reco) => {
-  const candByIndex = new Map()
-  for (const c of candidates) {
-    candByIndex.set(c.index, c)
-  }
-
-  const picks = Array.isArray(reco?.picks) ? reco.picks : []
-  const out = []
-  const used = new Set()
-  for (const p of picks) {
-    const idx = pickIndex(p)
-    if (!Number.isFinite(idx)) continue
-    const c = candByIndex.get(idx)
-    if (!c) continue
-    if (used.has(c.key)) continue
-    used.add(c.key)
-    out.push({
-      ...c,
-      aiReason: p?.reason ? String(p.reason) : (p?.match ? String(p.match) : ''),
-      aiGap: p?.gap ? String(p.gap) : '',
-      aiNext: p?.next ? String(p.next) : ''
-    })
-    if (out.length >= 5) break
-  }
-
-  if (out.length > 0) return out
-
-  return candidates.slice(0, 5).map(c => ({ ...c, aiReason: '' }))
 }
 
 const handleMatchJobs = async () => {
@@ -743,17 +704,16 @@ const handleMatchJobs = async () => {
       return
     }
 
-    const displayText = '匹配岗位：请给我推荐最适合的岗位并说明理由'
+    const displayText = '匹配岗位：请从候选中推荐最适合的岗位并说明理由'
     await pushUserText(displayText)
 
     const candidatesText = buildCandidateLines(list, 8)
     const candidateCards = buildCandidateCards(list, 8)
+    await pushAssistantJobCards('匹配岗位（数据库候选）', candidateCards)
+
     const payloadText =
-      `我需要你从候选岗位中做精排推荐，并给出我该怎么投递与准备。\n\n` +
+      `我刚做了岗位匹配，请你从候选岗位中做精排推荐，并给出我该怎么投递与准备。\n\n` +
       `候选岗位（来自数据库匹配结果）：\n${candidatesText}\n\n` +
-      `请按以下格式输出：先给出 3-6 行中文总结，然后在最后一行输出 ${JOB_RECO_MARKER} 后紧跟一个 JSON（不要用代码块）。\n` +
-      `JSON 结构示例：{"picks":[{"index":3,"reason":"...","gap":"...","next":"..."}]}\n` +
-      `其中 index 必须是候选列表的编号（1-10），最多给 5 个。\n\n` +
       `请你完成：\n` +
       `1) 从候选中挑选最适合我的 5 个岗位（按优先级排序）\n` +
       `2) 每个岗位给出匹配点、差距点、以及我下一步该补什么\n` +
@@ -761,14 +721,30 @@ const handleMatchJobs = async () => {
 
     sending.value = true
     try {
-      const reply = await callCareerChat(payloadText)
-      const reco = extractRecoJson(reply)
-      const pureText = stripRecoMarker(reply)
-      await pushAssistantText(pureText || '已完成岗位匹配推荐。')
-      if (reco) {
-        const cards = toCardsFromReco(candidateCards, reco)
-        await pushAssistantJobCards('推荐岗位（卡片可点开详情）', cards)
+      const msgId = `a_${Date.now()}`
+      const msg = { id: msgId, role: 'assistant', kind: 'text', content: '' }
+      messages.value.push(msg)
+      await scrollToBottom()
+
+      let finalPayload = null
+      await callAgentChatStream(
+        payloadText,
+        (delta) => {
+          msg.content = (msg.content || '') + (delta || '')
+          scrollToBottom()
+        },
+        (payload) => {
+          finalPayload = payload || null
+        }
+      )
+      if (!msg.content) {
+        msg.content = '已完成岗位匹配推荐。'
       }
+      const cards = mapAgentJobCards(finalPayload?.jobCards)
+      if (cards.length > 0) {
+        await pushAssistantJobCards('检索岗位（卡片可点开详情）', cards)
+      }
+      await pushAssistantCitations('参考资料（RAG）', finalPayload?.citations)
     } finally {
       sending.value = false
     }
@@ -920,11 +896,30 @@ const handleSend = async () => {
 
   sending.value = true
   try {
-    const out = await callCareerChatWithTools(content)
-    await pushAssistantText(out?.text || '未返回内容')
-    if (Array.isArray(out?.cards) && out.cards.length > 0) {
-      await pushAssistantJobCards(out.cardsTitle || '推荐岗位（卡片可点开详情）', out.cards)
+    const msgId = `a_${Date.now()}`
+    const msg = { id: msgId, role: 'assistant', kind: 'text', content: '' }
+    messages.value.push(msg)
+    await scrollToBottom()
+
+    let finalPayload = null
+    await callAgentChatStream(
+      content,
+      (delta) => {
+        msg.content = (msg.content || '') + (delta || '')
+        scrollToBottom()
+      },
+      (payload) => {
+        finalPayload = payload || null
+      }
+    )
+    if (!msg.content) {
+      msg.content = '未返回内容'
     }
+    const cards = mapAgentJobCards(finalPayload?.jobCards)
+    if (cards.length > 0) {
+      await pushAssistantJobCards('检索岗位（卡片可点开详情）', cards)
+    }
+    await pushAssistantCitations('参考资料（RAG）', finalPayload?.citations)
   } catch (e) {
     console.error(e)
     const backendMessage = e?.response?.data?.message
@@ -1012,6 +1007,78 @@ watch(profileDrawerVisible, async (v) => {
   border: 1px solid rgba(15, 23, 42, 0.12);
   background: #ffffff;
   overflow: hidden;
+}
+
+.citations {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.citations-header {
+  font-weight: 800;
+  color: var(--c-ink);
+}
+
+.citations-empty {
+  color: var(--c-ink-3);
+  font-size: 13px;
+}
+
+.citations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.citation-item {
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.citation-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.citation-title {
+  font-weight: 750;
+  color: var(--c-ink);
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.citation-link {
+  flex: none;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--c-primary);
+  text-decoration: none;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.citation-meta {
+  margin-top: 6px;
+  color: var(--c-ink-3);
+  font-size: 12px;
+}
+
+.citation-snippet {
+  margin-top: 8px;
+  color: var(--c-ink-2);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
 }
 
 .profile-dialog :deep(.el-dialog__body) {

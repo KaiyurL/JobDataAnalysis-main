@@ -2,7 +2,6 @@
 import re
 import time
 import random
-import pymysql
 import jieba
 import json
 import os
@@ -14,6 +13,7 @@ from datetime import datetime
 from urllib.parse import quote
 
 import requests
+import psycopg2
 from DrissionPage import ChromiumPage, ChromiumOptions
 from DrissionPage.errors import BrowserConnectError
 
@@ -98,12 +98,12 @@ def get_db_config():
     rc = load_runtime_config()
     db = rc.get("db") or {}
     return {
+        "type": (db.get("type") or "postgres"),
         "host": db.get("host"),
         "port": int(db.get("port") or 0),
         "user": db.get("user"),
         "password": db.get("password"),
         "database": db.get("database"),
-        "charset": db.get("charset") or "utf8mb4",
     }
 
 def get_user_agent_of_pc():
@@ -426,71 +426,65 @@ def build_51job_params(keyword, city_code, page_num, page_size=20):
 
 _tables_ready = False
 
-def ensure_mysql_tables():
+def ensure_db_tables():
     global _tables_ready
     if _tables_ready:
         return
 
-    conn = pymysql.connect(**get_db_config())
+    cfg = get_db_config()
+    conn = psycopg2.connect(
+        host=cfg.get("host"),
+        port=int(cfg.get("port") or 5432),
+        user=cfg.get("user"),
+        password=cfg.get("password"),
+        dbname=cfg.get("database"),
+    )
     try:
         with conn.cursor() as cursor:
+            cursor.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS job_info (
-                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                id BIGSERIAL PRIMARY KEY,
                 job_name VARCHAR(255),
                 company_name VARCHAR(255),
                 city VARCHAR(100),
-                job_url VARCHAR(512),
-                salary_min INT,
-                salary_max INT,
-                salary_avg DECIMAL(10,2),
+                job_url TEXT,
+                salary_min INTEGER,
+                salary_max INTEGER,
+                salary_avg NUMERIC(10,2),
                 experience VARCHAR(100),
                 education VARCHAR(100),
-                job_desc MEDIUMTEXT,
+                job_desc TEXT,
                 job_keywords TEXT,
                 company_size VARCHAR(100),
                 company_industry VARCHAR(255),
                 company_welfare TEXT,
                 publish_date DATE,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
+            );
             """)
 
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS job_info_51job (
-                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                id BIGSERIAL PRIMARY KEY,
                 job_name VARCHAR(255),
                 company_name VARCHAR(255),
                 city VARCHAR(100),
-                job_url VARCHAR(512),
-                salary_min INT,
-                salary_max INT,
-                salary_avg DECIMAL(10,2),
+                job_url TEXT,
+                salary_min INTEGER,
+                salary_max INTEGER,
+                salary_avg NUMERIC(10,2),
                 experience VARCHAR(100),
                 education VARCHAR(100),
-                job_desc MEDIUMTEXT,
+                job_desc TEXT,
                 job_keywords TEXT,
                 company_size VARCHAR(100),
                 company_industry VARCHAR(255),
                 company_welfare TEXT,
                 publish_date DATE,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
+            );
             """)
-
-            cursor.execute(
-                "SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME IN ('job_info','job_info_51job')",
-                (get_db_config()["database"],),
-            )
-            cols = cursor.fetchall()
-            by_table = {"job_info": set(), "job_info_51job": set()}
-            for t, c in cols:
-                if t in by_table:
-                    by_table[t].add(c)
-            if "job_url" not in by_table["job_info"]:
-                cursor.execute("ALTER TABLE job_info ADD COLUMN job_url VARCHAR(512)")
-            if "job_url" not in by_table["job_info_51job"]:
-                cursor.execute("ALTER TABLE job_info_51job ADD COLUMN job_url VARCHAR(512)")
         conn.commit()
         _tables_ready = True
     except Exception as e:
@@ -500,8 +494,15 @@ def ensure_mysql_tables():
         conn.close()
 
 def _insert_job(table_name, job_data):
-    ensure_mysql_tables()
-    conn = pymysql.connect(**get_db_config())
+    ensure_db_tables()
+    cfg = get_db_config()
+    conn = psycopg2.connect(
+        host=cfg.get("host"),
+        port=int(cfg.get("port") or 5432),
+        user=cfg.get("user"),
+        password=cfg.get("password"),
+        dbname=cfg.get("database"),
+    )
     try:
         with conn.cursor() as cursor:
             sql = f'''
