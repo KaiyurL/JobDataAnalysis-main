@@ -99,7 +99,7 @@
                 />
                 <el-button type="primary" @click="addKeyword">添加</el-button>
               </div>
-              <div class="form-tip">多个关键词将分别爬取</div>
+              <div class="form-tip">建议一个关键词爬取</div>
             </el-form-item>
 
             <el-form-item label="目标城市">

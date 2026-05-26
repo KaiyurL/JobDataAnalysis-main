@@ -1,0 +1,23 @@
+{
+  "db": {
+    "host": "localhost",
+    "port": 3306,
+    "user": "root",
+    "password": "123456ppoo",
+    "database": "job_data",
+    "charset": "utf8mb4"
+  },
+  "browser": {
+    "preferred": "auto",
+    "edge_candidates": [
+      "C:\\\\Program Files\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe",
+      "C:\\\\Program Files (x86)\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe"
+    ],
+    "chrome_candidates": [
+      "C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe",
+      "C:\\\\Program Files (x86)\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe"
+    ],
+    "local_appdata_edge_relative": "Microsoft\\\\Edge\\\\Application\\\\msedge.exe",
+    "local_appdata_playwright_glob": "ms-playwright\\\\chromium-*\\\\chrome-win\\\\chrome.exe"
+  }
+}

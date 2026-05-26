@@ -69,8 +69,8 @@ JobDataAnalysis/
 
 ### 1. 数据库配置
 
-数据库账号：root  
-数据库密码：123456ppoo
+数据库连接信息统一放在配置文件中：
+- `crawler/runtime_config.json`（包含 MySQL 连接 + 浏览器路径）
 
 ```sql
 CREATE DATABASE IF NOT EXISTS job_data DEFAULT CHARACTER SET utf8mb4;
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS user (
 说明：
 - 岗位表 `job_info` / `job_info_51job` 在首次运行爬虫时会自动创建（无需手动执行 schema）
 
-Python 爬虫的数据库连接信息在 `crawler/spider.py` 的 `DB_CONFIG` 中配置（需要和上面的账号密码保持一致）。
+Python 爬虫与 NLP 流水线都会读取 `crawler/runtime_config.json` 的数据库配置（需要和上面的库名保持一致）。
 
 ### 需要修改的配置（重要）
 
@@ -98,9 +98,11 @@ Python 爬虫的数据库连接信息在 `crawler/spider.py` 的 `DB_CONFIG` 中
   - `spring.datasource.username`
   - `spring.datasource.password`
 
-2) 爬虫数据库配置（Python）
-- 文件：`crawler/spider.py`
-- 需要确认/修改：`DB_CONFIG`（host/port/user/password/database/charset）
+2) 爬虫/NLP 数据库与浏览器配置（Python）
+- 文件：`crawler/runtime_config.json`
+- 需要确认/修改：
+  - `db`（host/port/user/password/database/charset）
+  - `browser`（edge_candidates / chrome_candidates 等浏览器路径）
 
 3) 爬虫运行配置（前端「数据管理」保存到本地）
 - 文件：`crawler/config.json`（前端「数据管理」页点“保存配置”会写入这里）
@@ -112,9 +114,7 @@ Python 爬虫的数据库连接信息在 `crawler/spider.py` 的 `DB_CONFIG` 中
   - `city_codes_51job`（前程无忧城市编码映射）
   - `delay_min` / `delay_max`（请求间隔，建议保守一点避免风控）
   - `browser`: `auto` / `edge` / `chrome`（选择启动浏览器）
-  - 浏览器路径（Windows）：若你的 Edge/Chrome 安装路径不在默认位置，需要修改 `crawler/spider.py` 的 `find_browser_path()`：
-    - `edge_candidates`（msedge.exe 路径列表）
-    - `chrome_candidates`（chrome.exe 路径列表）
+  - 浏览器路径（Windows）：在 `crawler/runtime_config.json` 的 `browser.edge_candidates` / `browser.chrome_candidates` 中配置
 
 4) AI 智能求职助手（阿里云百炼）
 - 后端会从系统环境变量读取 API Key（推荐方式）：

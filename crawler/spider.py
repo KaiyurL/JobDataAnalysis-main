@@ -17,16 +17,8 @@ import requests
 from DrissionPage import ChromiumPage, ChromiumOptions
 from DrissionPage.errors import BrowserConnectError
 
-DB_CONFIG = {
-    'host': 'localhost',
-    'port': 3306,
-    'user': 'root',
-    'password': '123456ppoo',
-    'database': 'job_data',
-    'charset': 'utf8mb4'
-}
-
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'config.json')
+RUNTIME_CONFIG_FILE = os.environ.get("JOBDATA_RUNTIME_CONFIG") or os.path.join(os.path.dirname(__file__), "runtime_config.json")
 
 API_51JOB_BASE = "https://we.51job.com/api/job/search-pc"
 
@@ -56,24 +48,22 @@ DEFAULT_CITY_CODES_51JOB = {
 
 def find_browser_path(preferred=None):
     pref = str(preferred or "auto").strip().lower()
-
-    edge_candidates = [
-        r"C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
-        r"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-    ]
-    chrome_candidates = [
-        r"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-        r"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-    ]
+    rc = load_runtime_config()
+    b = rc.get("browser") or {}
+    edge_candidates = list(b.get("edge_candidates") or [])
+    chrome_candidates = list(b.get("chrome_candidates") or [])
 
     local_app_data = os.environ.get("LOCALAPPDATA") or ""
     if local_app_data:
-        edge_user = os.path.join(local_app_data, "Microsoft", "Edge", "Application", "msedge.exe")
+        edge_rel = str(b.get("local_appdata_edge_relative") or "").strip()
+        edge_user = os.path.join(local_app_data, edge_rel) if edge_rel else ""
         if os.path.exists(edge_user):
             edge_candidates.insert(0, edge_user)
 
-        for p in glob.glob(os.path.join(local_app_data, "ms-playwright", "chromium-*", "chrome-win", "chrome.exe")):
-            chrome_candidates.insert(0, p)
+        pw_glob = str(b.get("local_appdata_playwright_glob") or "").strip()
+        if pw_glob:
+            for p in glob.glob(os.path.join(local_app_data, pw_glob)):
+                chrome_candidates.insert(0, p)
 
     if pref in ("edge", "msedge"):
         candidates = edge_candidates + chrome_candidates
@@ -86,6 +76,35 @@ def find_browser_path(preferred=None):
         if p and os.path.exists(p):
             return p
     return None
+
+_runtime_config_cache = None
+
+def load_runtime_config():
+    global _runtime_config_cache
+    if isinstance(_runtime_config_cache, dict):
+        return _runtime_config_cache
+    if not os.path.exists(RUNTIME_CONFIG_FILE):
+        raise RuntimeError(f"找不到配置文件: {RUNTIME_CONFIG_FILE}")
+    with open(RUNTIME_CONFIG_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise RuntimeError("配置文件格式错误: 需要 JSON Object")
+    if not isinstance(data.get("db"), dict):
+        raise RuntimeError("配置文件缺少 db 配置")
+    _runtime_config_cache = data
+    return _runtime_config_cache
+
+def get_db_config():
+    rc = load_runtime_config()
+    db = rc.get("db") or {}
+    return {
+        "host": db.get("host"),
+        "port": int(db.get("port") or 0),
+        "user": db.get("user"),
+        "password": db.get("password"),
+        "database": db.get("database"),
+        "charset": db.get("charset") or "utf8mb4",
+    }
 
 def get_user_agent_of_pc():
     user_agents = [
@@ -412,7 +431,7 @@ def ensure_mysql_tables():
     if _tables_ready:
         return
 
-    conn = pymysql.connect(**DB_CONFIG)
+    conn = pymysql.connect(**get_db_config())
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
@@ -461,7 +480,7 @@ def ensure_mysql_tables():
 
             cursor.execute(
                 "SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME IN ('job_info','job_info_51job')",
-                (DB_CONFIG["database"],),
+                (get_db_config()["database"],),
             )
             cols = cursor.fetchall()
             by_table = {"job_info": set(), "job_info_51job": set()}
@@ -482,7 +501,7 @@ def ensure_mysql_tables():
 
 def _insert_job(table_name, job_data):
     ensure_mysql_tables()
-    conn = pymysql.connect(**DB_CONFIG)
+    conn = pymysql.connect(**get_db_config())
     try:
         with conn.cursor() as cursor:
             sql = f'''

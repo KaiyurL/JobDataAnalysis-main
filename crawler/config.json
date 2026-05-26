@@ -1,8 +1,8 @@
 {
   "platform" : "boss",
-  "keywords" : [ "python"],
-  "cities" : [ "厦门" ],
-  "pages_per_keyword" : 1,
+  "keywords" : [ "java", "小程序", "ai" ],
+  "cities" : [ "厦门", "北京", "福州", "上海", "广州", "深圳", "杭州", "成都" ],
+  "pages_per_keyword" : 4,
   "pages_per_city_51job" : 1,
   "delay_min" : 4,
   "delay_max" : 8,
