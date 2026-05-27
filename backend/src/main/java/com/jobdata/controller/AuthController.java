@@ -1,7 +1,7 @@
 
 package com.jobdata.controller;
 
-import com.jobdata.config.JwtUtil;
+import com.jobdata.util.JwtUtil;
 import com.jobdata.dto.LoginRequest;
 import com.jobdata.dto.LoginResponse;
 import com.jobdata.dto.Result;
@@ -43,15 +43,5 @@ public class AuthController {
         }
         userService.createUser(request.getUsername(), request.getPassword());
         return Result.success("注册成功");
-    }
-
-    @GetMapping("/check")
-    public Result<Boolean> check() {
-        return Result.success(true);
-    }
-
-    @PostMapping("/logout")
-    public Result<String> logout() {
-        return Result.success("登出成功");
     }
 }

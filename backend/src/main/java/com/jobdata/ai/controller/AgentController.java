@@ -1,17 +1,23 @@
-package com.jobdata.ai;
+package com.jobdata.ai.controller;
 
+import com.jobdata.ai.model.AgentChatResponse;
+import com.jobdata.ai.model.AgentStreamEvent;
+import com.jobdata.ai.service.AgentChatService;
 import com.jobdata.dto.AiChatRequest;
 import com.jobdata.dto.Result;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import reactor.core.publisher.Flux;
 
+/**
+ * AI Agent 控制器，提供聊天接口。
+ */
 @RestController
 @RequestMapping("/api/agent")
 @CrossOrigin(origins = "*")

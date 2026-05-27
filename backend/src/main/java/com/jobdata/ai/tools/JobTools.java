@@ -16,6 +16,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 岗位检索工具类，提供大模型可调用的 job_search 工具
+ */
 @Component
 public class JobTools {
 
@@ -30,6 +33,20 @@ public class JobTools {
     }
 
 
+    /**
+     * 从数据库检索招聘岗位，支持多条件筛选
+     *
+     * @param source 数据来源：51job|boss|all
+     * @param keyword 关键词：岗位/公司关键字
+     * @param city 城市，支持逗号分隔多个城市
+     * @param education 学历要求
+     * @param experience 经验要求
+     * @param minSalaryK 最低月薪(K)
+     * @param maxSalaryK 最高月薪(K)
+     * @param company 公司名关键词
+     * @param limit 返回数量上限，建议<=10
+     * @return 岗位列表
+     */
     @Tool(name = "job_search", description = "按条件从数据库检索招聘岗位，返回岗位列表（真实数据）。当用户提出要推荐更多岗位或按薪资/城市/学历/经验/公司等筛选时使用。")
     public List<Map<String, Object>> jobSearch(
             @ToolParam(description = "数据来源：51job|boss|all", required = false) String source,
@@ -64,6 +81,9 @@ public class JobTools {
 
 
 
+    /**
+     * 检索 BOSS 直聘岗位
+     */
     private List<Map<String, Object>> searchBoss(
             String keyword,
             String city,
@@ -108,6 +128,9 @@ public class JobTools {
         return out;
     }
 
+    /**
+     * 检索前程无忧岗位
+     */
     private List<Map<String, Object>> search51(
             String keyword,
             String city,
@@ -152,6 +175,9 @@ public class JobTools {
         return out;
     }
 
+    /**
+     * 将 BOSS 直聘岗位转换为卡片格式
+     */
     private Map<String, Object> toCard(JobInfo j, String source) {
         Map<String, Object> m = new HashMap<>();
         m.put("source", source);
@@ -165,9 +191,19 @@ public class JobTools {
         m.put("salaryAvg", j.getSalaryAvg());
         m.put("experience", j.getExperience());
         m.put("education", j.getEducation());
+        m.put("jobDesc", j.getJobDesc());
+        m.put("jobKeywords", j.getJobKeywords());
+        m.put("companySize", j.getCompanySize());
+        m.put("companyIndustry", j.getCompanyIndustry());
+        m.put("companyWelfare", j.getCompanyWelfare());
+        m.put("publishDate", j.getPublishDate());
+        m.put("createdAt", j.getCreatedAt());
         return m;
     }
 
+    /**
+     * 将前程无忧岗位转换为卡片格式
+     */
     private Map<String, Object> toCard(JobInfo51Job j, String source) {
         Map<String, Object> m = new HashMap<>();
         m.put("source", source);
@@ -181,6 +217,13 @@ public class JobTools {
         m.put("salaryAvg", j.getSalaryAvg());
         m.put("experience", j.getExperience());
         m.put("education", j.getEducation());
+        m.put("jobDesc", j.getJobDesc());
+        m.put("jobKeywords", j.getJobKeywords());
+        m.put("companySize", j.getCompanySize());
+        m.put("companyIndustry", j.getCompanyIndustry());
+        m.put("companyWelfare", j.getCompanyWelfare());
+        m.put("publishDate", j.getPublishDate());
+        m.put("createdAt", j.getCreatedAt());
         return m;
     }
 }

@@ -47,26 +47,6 @@ export default {
     return api.get('/jobs51/stats/overview', { params: filters, timeout: 60000 })
   },
   
-  getCitySalary(filters = {}) {
-    return api.get('/jobs/stats/city-salary', { params: filters })
-  },
-  
-  getEducationSalary(filters = {}) {
-    return api.get('/jobs/stats/education-salary', { params: filters })
-  },
-  
-  getExperienceSalary(filters = {}) {
-    return api.get('/jobs/stats/experience-salary', { params: filters })
-  },
-  
-  getKeywords(filters = {}) {
-    return api.get('/jobs/stats/keywords', { params: filters })
-  },
-  
-  getIndustry(filters = {}) {
-    return api.get('/jobs/stats/industry', { params: filters })
-  },
-  
   getJobPage(current, size, filters = {}) {
     return api.get('/jobs/page', {
       params: {
@@ -89,22 +69,6 @@ export default {
 
   predictSalary(data) {
     return api.post('/jobs/predict/salary', data)
-  },
-
-  matchJobs(data) {
-    return api.post('/jobs/match/jobs', data, { timeout: 60000 })
-  },
-
-  searchJobs(data) {
-    return api.post('/jobs/search', data, { timeout: 60000 })
-  },
-
-  getAllSkills() {
-    return api.get('/jobs/skills')
-  },
-
-  getAllSkillsSorted() {
-    return api.get('/jobs/skills/all')
   },
 
   getCompanyHotStats() {
@@ -154,18 +118,6 @@ export default {
     return api.post('/auth/register', data)
   },
 
-  checkAuth() {
-    return api.get('/auth/check')
-  },
-
-  logout() {
-    return api.post('/auth/logout')
-  },
-
-  getUserInfo() {
-    return api.get('/user/info')
-  },
-
   getUserProfile() {
     return api.get('/user/profile')
   },
@@ -200,10 +152,6 @@ export default {
 
   recordJobHistory(data) {
     return api.post('/user/job-history', data)
-  },
-
-  careerChat(data) {
-    return api.post('/ai/career-chat', data, { timeout: 60000 })
   },
 
   parseResume(file) {
@@ -243,5 +191,9 @@ export default {
 
   getPipelineFile(key) {
     return api.get('/pipeline/file', { params: { key }, responseType: 'blob', timeout: 60000 })
+  },
+
+  reindexJobs(params = {}) {
+    return api.post('/rag/reindex/jobs', null, { params, timeout: 120000 })
   }
 }

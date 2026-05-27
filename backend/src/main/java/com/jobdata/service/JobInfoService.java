@@ -31,6 +31,4 @@ public interface JobInfoService extends IService<JobInfo> {
 
     List<CompanySizeDTO> getCompanySizeStats();
 
-    List<JobMatchDTO> matchJobs(JobMatchRequest request);
-
 }

@@ -1,6 +1,10 @@
 package com.jobdata.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jobdata.ai.controller.AgentController;
+import com.jobdata.ai.model.AgentChatResponse;
+import com.jobdata.ai.model.AgentStreamEvent;
+import com.jobdata.ai.service.AgentChatService;
 import com.jobdata.dto.AiChatRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,7 +48,6 @@ class AgentControllerTest {
         AgentChatResponse resp = new AgentChatResponse();
         resp.setReply("hello");
         resp.setJobCards(List.of(Map.of("source", "boss", "jobName", "Java开发")));
-        resp.setCitations(List.of(Map.of("title", "t1")));
         when(agentChatService.chatOnce(any(AiChatRequest.class), any())).thenReturn(resp);
 
         AiChatRequest req = new AiChatRequest();

@@ -64,35 +64,6 @@
                     </el-col>
                   </el-row>
                 </div>
-                <div v-else-if="m.kind === 'citations'" class="citations">
-                  <div class="citations-header">{{ m.title || '参考资料（RAG）' }}</div>
-                  <div v-if="!m.citations || !m.citations.length" class="citations-empty">暂无</div>
-                  <div v-else class="citations-list">
-                    <div v-for="(c, i) in m.citations" :key="`c_${m.id}_${i}`" class="citation-item">
-                      <div class="citation-title-row">
-                        <div class="citation-title">
-                          {{ (c && (c.title || c.job_name || c.jobName)) || `参考片段 ${i + 1}` }}
-                        </div>
-                        <a
-                          v-if="citationUrlOf(c)"
-                          class="citation-link"
-                          :href="citationUrlOf(c)"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          打开
-                        </a>
-                      </div>
-                      <div class="citation-meta">
-                        <span v-if="c && (c.source || c.source_table || c.sourceTable)">{{ c.source || c.source_table || c.sourceTable }}</span>
-                        <span v-if="c && (c.job_id || c.jobId)"> · {{ c.job_id || c.jobId }}</span>
-                      </div>
-                      <div v-if="c && (c.snippet || c.text)" class="citation-snippet">
-                        {{ c.snippet || c.text }}
-                      </div>
-                    </div>
-                  </div>
-                </div>
                 <div v-else class="chat-content" v-html="formatContent(m.content)"></div>
               </div>
             </div>
@@ -117,9 +88,7 @@
                 />
                 <div class="composer-inline">
                   <div class="chat-tools">
-                    <el-button type="success" plain size="small" @click="handleMatchJobs" :loading="matchingJobs" :disabled="sending">
-                      <el-icon><Search /></el-icon> 匹配岗位
-                    </el-button>
+                    <el-button size="small" @click="usePrompt('请基于我的求职画像，从数据库检索岗位并做精排推荐：输出5个最适合的岗位（按优先级排序），每个岗位给出匹配点/差距点/投递与面试准备建议。')">匹配岗位</el-button>
                     <el-button size="small" @click="usePrompt('帮我优化简历要点，给出可以直接写到简历上的 bullet')">简历优化</el-button>
                     <el-button size="small" @click="usePrompt('列出我这种背景去面这个岗位，最容易被问到的5个面试题')">模拟面试</el-button>
                   </div>
@@ -337,7 +306,7 @@
 import { ref, nextTick, onMounted, watch, inject } from 'vue'
 import api from '../api.js'
 import { ElMessage } from 'element-plus'
-import { Upload, RefreshLeft, Search, View, CopyDocument, TopRight, ArrowUp, Star, StarFilled } from '@element-plus/icons-vue'
+import { Upload, RefreshLeft, View, CopyDocument, TopRight, ArrowUp, Star, StarFilled } from '@element-plus/icons-vue'
 
 const cssVar = (name, fallback) => {
   if (typeof window === 'undefined') return fallback
@@ -380,14 +349,13 @@ const messages = ref([
     id: `m_${Date.now()}`,
     role: 'assistant',
     kind: 'text',
-    content: '你好！我是你的 AI 求职顾问。你可以点击上方的“求职画像”完善信息，或点击“上传简历”自动提取。确认画像后，点击下方“匹配岗位”即可获取推荐，也可以随时向我提问简历与面试相关的问题。'
+    content: '你好！我是你的 AI 求职顾问。你可以点击上方的“求职画像”完善信息，或点击“上传简历”自动提取。你也可以点击下方“匹配岗位/简历优化/模拟面试”快速生成提问内容，然后点击发送获取建议。'
   }
 ])
 
 const input = ref('')
 const sending = ref(false)
 const parsingResume = ref(false)
-const matchingJobs = ref(false)
 const chatBodyRef = ref(null)
 const jobDetailVisible = ref(false)
 const selectedJob = ref(null)
@@ -427,13 +395,6 @@ const normalizeJobUrl = (url) => {
   return `https://${t}`
 }
 
-const citationUrlOf = (c) => {
-  if (!c || typeof c !== 'object') return ''
-  const u = c.job_url || c.jobUrl || c.url || c.link || ''
-  const normalized = normalizeJobUrl(u)
-  return normalized && normalized !== '#' ? normalized : ''
-}
-
 const canOpenUrl = (url) => {
   const u = normalizeJobUrl(url)
   return u && u !== '#'
@@ -447,14 +408,14 @@ const scoreColor = (score) => {
 }
 
 const sourceLabel = (sourceTable) => {
-  if (sourceTable === 'job_info_51job') return '51job'
-  if (sourceTable === 'job_info') return 'Boss'
+  if (sourceTable === 'job_info_51job' || sourceTable === '51job') return '51job'
+  if (sourceTable === 'job_info' || sourceTable === 'boss') return 'Boss'
   return '未知'
 }
 
 const sourceTagType = (sourceTable) => {
-  if (sourceTable === 'job_info_51job') return 'warning'
-  if (sourceTable === 'job_info') return 'success'
+  if (sourceTable === 'job_info_51job' || sourceTable === '51job') return 'warning'
+  if (sourceTable === 'job_info' || sourceTable === 'boss') return 'success'
   return 'info'
 }
 
@@ -593,13 +554,22 @@ const mapAgentJobCards = (cards) => {
       salaryMax: c.salaryMax,
       salaryAvg: c.salaryAvg,
       experience: c.experience,
-      education: c.education
+      education: c.education,
+      jobDesc: c.jobDesc,
+      jobKeywords: c.jobKeywords,
+      companySize: c.companySize,
+      companyIndustry: c.companyIndustry,
+      companyWelfare: c.companyWelfare,
+      publishDate: c.publishDate,
+      createdAt: c.createdAt
     }
     out.push({
       index: i + 1,
       key: `${sourceTable}::${job.jobUrl || job.id || i}`,
       job,
-      sourceTable
+      sourceTable,
+      matchScore: c.matchScore,
+      aiReason: c.aiReason
     })
   }
   return out
@@ -625,137 +595,6 @@ const pushAssistantJobCards = async (title, cards) => {
     cards: cards || []
   })
   await scrollToBottom()
-}
-
-const pushAssistantCitations = async (title, citations) => {
-  if (!Array.isArray(citations) || citations.length === 0) return
-  messages.value.push({
-    id: `s_${Date.now()}`,
-    role: 'assistant',
-    kind: 'citations',
-    title,
-    citations: citations.slice(0, 8)
-  })
-  await scrollToBottom()
-}
-
-const buildCandidateLines = (list, limit = 8) => {
-  const out = []
-  const top = (list || []).slice(0, limit)
-  for (let i = 0; i < top.length; i++) {
-    const m = top[i]
-    const j = m?.job || {}
-    const src = m?.sourceTable === 'job_info_51job' ? '51job' : 'Boss'
-    const salary = (j.salaryMin != null && j.salaryMax != null) ? `${j.salaryMin}-${j.salaryMax}K` : '薪资面议'
-    const url = normalizeJobUrl(j.jobUrl)
-    out.push(`${i + 1}. [${src}] ${j.jobName || ''} @ ${j.companyName || ''} | ${j.city || ''} | ${salary} | ${j.experience || '经验不限'} | ${j.education || '学历不限'} | ${url}`)
-  }
-  return out.join('\n')
-}
-
-const buildCandidateCards = (list, limit = 10) => {
-  const top = (list || []).slice(0, limit)
-  const out = []
-  for (let i = 0; i < top.length; i++) {
-    const m = top[i]
-    const job = m?.job || {}
-    out.push({
-      index: i + 1,
-      key: `${m?.sourceTable || ''}::${job?.jobUrl || job?.id || ''}::${i}`,
-      job,
-      sourceTable: m?.sourceTable || '',
-      matchScore: m?.matchScore
-    })
-  }
-  return out
-}
-
-const handleMatchJobs = async () => {
-  if (!profile.value.targetRole) {
-    ElMessage.warning('请先填写目标岗位')
-    return
-  }
-  if (sending.value) return
-  matchingJobs.value = true
-  try {
-    const res = await api.matchJobs({
-      targetRole: profile.value.targetRole,
-      city: profile.value.city,
-      education: profile.value.education,
-      experience: profile.value.experience,
-      skills: profile.value.skills,
-      notes: profile.value.notes,
-      highlights: Array.isArray(profileExtra.value?.highlights) ? profileExtra.value.highlights : [],
-      projects: Array.isArray(profileExtra.value?.projects)
-        ? profileExtra.value.projects.slice(0, 2).map(p => ({
-            name: p?.name || '',
-            role: p?.role || '',
-            tech: Array.isArray(p?.tech) ? p.tech : [],
-            highlights: Array.isArray(p?.highlights) ? p.highlights : []
-          }))
-        : []
-    })
-    if (res.data.code !== 200) {
-      throw new Error(res.data.message || '获取匹配岗位失败')
-    }
-    const list = res.data.data || []
-    if (!list.length) {
-      await pushAssistantText('没有找到特别匹配的岗位。建议放宽城市或把目标岗位写得更泛一些（例如“后端开发/Java”）。')
-      return
-    }
-
-    const displayText = '匹配岗位：请从候选中推荐最适合的岗位并说明理由'
-    await pushUserText(displayText)
-
-    const candidatesText = buildCandidateLines(list, 8)
-    const candidateCards = buildCandidateCards(list, 8)
-    await pushAssistantJobCards('匹配岗位（数据库候选）', candidateCards)
-
-    const payloadText =
-      `我刚做了岗位匹配，请你从候选岗位中做精排推荐，并给出我该怎么投递与准备。\n\n` +
-      `候选岗位（来自数据库匹配结果）：\n${candidatesText}\n\n` +
-      `请你完成：\n` +
-      `1) 从候选中挑选最适合我的 5 个岗位（按优先级排序）\n` +
-      `2) 每个岗位给出匹配点、差距点、以及我下一步该补什么\n` +
-      `3) 给出投递策略（简历怎么改/投递话术/面试准备重点）`
-
-    sending.value = true
-    try {
-      const msgId = `a_${Date.now()}`
-      const msg = { id: msgId, role: 'assistant', kind: 'text', content: '' }
-      messages.value.push(msg)
-      await scrollToBottom()
-
-      let finalPayload = null
-      await callAgentChatStream(
-        payloadText,
-        (delta) => {
-          msg.content = (msg.content || '') + (delta || '')
-          scrollToBottom()
-        },
-        (payload) => {
-          finalPayload = payload || null
-        }
-      )
-      if (!msg.content) {
-        msg.content = '已完成岗位匹配推荐。'
-      }
-      const cards = mapAgentJobCards(finalPayload?.jobCards)
-      if (cards.length > 0) {
-        await pushAssistantJobCards('检索岗位（卡片可点开详情）', cards)
-      }
-      await pushAssistantCitations('参考资料（RAG）', finalPayload?.citations)
-    } finally {
-      sending.value = false
-    }
-  } catch (e) {
-    console.error(e)
-    const backendMessage = e?.response?.data?.message
-    const isTimeout = e?.code === 'ECONNABORTED' || String(e?.message || '').includes('timeout')
-    ElMessage.error('获取匹配岗位失败: ' + (backendMessage || (isTimeout ? '请求超时，请稍后再试' : (e?.message || '网络或服务端错误'))))
-  } finally {
-    matchingJobs.value = false
-  }
 }
 
 const handleResumeUpload = async (file) => {
@@ -917,9 +756,8 @@ const handleSend = async () => {
     }
     const cards = mapAgentJobCards(finalPayload?.jobCards)
     if (cards.length > 0) {
-      await pushAssistantJobCards('检索岗位（卡片可点开详情）', cards)
+      await pushAssistantJobCards('推荐岗位（以此为准）', cards)
     }
-    await pushAssistantCitations('参考资料（RAG）', finalPayload?.citations)
   } catch (e) {
     console.error(e)
     const backendMessage = e?.response?.data?.message
@@ -1007,78 +845,6 @@ watch(profileDrawerVisible, async (v) => {
   border: 1px solid rgba(15, 23, 42, 0.12);
   background: #ffffff;
   overflow: hidden;
-}
-
-.citations {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.citations-header {
-  font-weight: 800;
-  color: var(--c-ink);
-}
-
-.citations-empty {
-  color: var(--c-ink-3);
-  font-size: 13px;
-}
-
-.citations-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.citation-item {
-  border: 1px solid var(--c-border);
-  border-radius: 12px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.75);
-}
-
-.citation-title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-}
-
-.citation-title {
-  font-weight: 750;
-  color: var(--c-ink);
-  font-size: 14px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.citation-link {
-  flex: none;
-  font-weight: 700;
-  font-size: 12px;
-  color: var(--c-primary);
-  text-decoration: none;
-  border: 1px solid rgba(59, 130, 246, 0.35);
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(59, 130, 246, 0.08);
-}
-
-.citation-meta {
-  margin-top: 6px;
-  color: var(--c-ink-3);
-  font-size: 12px;
-}
-
-.citation-snippet {
-  margin-top: 8px;
-  color: var(--c-ink-2);
-  font-size: 13px;
-  line-height: 1.55;
-  white-space: pre-wrap;
 }
 
 .profile-dialog :deep(.el-dialog__body) {
@@ -1585,88 +1351,6 @@ watch(profileDrawerVisible, async (v) => {
 
 .composer-bottom {
   padding: 10px 2px 0;
-}
-
-/* 推荐岗位样式 */
-.match-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.empty-match {
-  padding-top: 40px;
-}
-
-.match-item {
-  padding: 16px;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  transition: all 0.2s;
-}
-
-.match-item:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-}
-
-.match-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.match-title {
-  font-weight: 700;
-  font-size: 15px;
-  color: var(--c-ink);
-}
-
-.match-salary {
-  font-weight: 800;
-  color: var(--c-primary-700);
-  font-size: 14px;
-}
-
-.match-company {
-  font-size: 13px;
-  color: var(--c-ink-3);
-  margin-bottom: 10px;
-}
-
-.match-tags {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.match-score-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.score-text {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--c-ink-2);
-}
-
-.match-reason {
-  font-size: 12px;
-  color: var(--c-ink-3);
-  background: rgba(255, 255, 255, 0.55);
-  padding: 8px;
-  border-radius: 6px;
-  margin-bottom: 10px;
-}
-
-.match-actions {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .job-detail-title {

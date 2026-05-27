@@ -1,9 +1,7 @@
 
 package com.jobdata.controller;
 
-import com.jobdata.dto.LoginResponse;
 import com.jobdata.dto.Result;
-import com.jobdata.entity.User;
 import com.jobdata.entity.UserFavoriteJob;
 import com.jobdata.entity.UserJobHistory;
 import com.jobdata.entity.UserMatchHistory;
@@ -12,7 +10,6 @@ import com.jobdata.service.UserFavoriteJobService;
 import com.jobdata.service.UserJobHistoryService;
 import com.jobdata.service.UserMatchHistoryService;
 import com.jobdata.service.UserProfileService;
-import com.jobdata.service.UserService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,8 +26,6 @@ import java.util.Map;
 @RequestMapping("/api/user")
 public class UserController {
     @Autowired
-    private UserService userService;
-    @Autowired
     private UserProfileService userProfileService;
     @Autowired
     private UserFavoriteJobService userFavoriteJobService;
@@ -40,16 +35,6 @@ public class UserController {
     private UserJobHistoryService userJobHistoryService;
     @Autowired
     private ObjectMapper objectMapper;
-
-    @GetMapping("/info")
-    public Result<LoginResponse.UserInfo> getCurrentUser(Authentication authentication) {
-        Long userId = (Long) authentication.getPrincipal();
-        User user = userService.getById(userId);
-        if (user != null) {
-            return Result.success(new LoginResponse.UserInfo(user.getId(), user.getUsername(), user.getRole()));
-        }
-        return Result.fail("用户不存在");
-    }
 
     @GetMapping("/profile")
     public Result<Map<String, Object>> getProfile(Authentication authentication) {

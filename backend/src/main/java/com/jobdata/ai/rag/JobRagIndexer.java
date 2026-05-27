@@ -16,6 +16,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 岗位 RAG 索引器，负责将岗位数据构建为向量文档并存入向量数据库
+ */
 @Service
 public class JobRagIndexer {
 
@@ -31,6 +34,14 @@ public class JobRagIndexer {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    /**
+     * 重新索引岗位数据到向量数据库
+     *
+     * @param source 数据来源：boss|51job|all
+     * @param limit 限制数量，0表示全部
+     * @param resetVectorStore 是否清空向量数据库
+     * @return 索引结果统计
+     */
     public Map<String, Object> reindexJobs(String source, Integer limit, boolean resetVectorStore) {
         String src = source == null ? "all" : source.trim().toLowerCase();
         int lim = limit == null ? 0 : Math.max(0, limit);
@@ -95,6 +106,9 @@ public class JobRagIndexer {
     }
 
 
+    /**
+     * 将 BOSS 直聘岗位转换为向量文档
+     */
     private Document toDocFromBoss(JobInfo j) {
         Map<String, Object> meta = new HashMap<>();
         meta.put("source", "boss");
@@ -106,10 +120,21 @@ public class JobRagIndexer {
         putStr(meta, "city", j.getCity());
         putStr(meta, "education", j.getEducation());
         putStr(meta, "experience", j.getExperience());
+        put(meta, "salary_min", j.getSalaryMin());
+        put(meta, "salary_max", j.getSalaryMax());
+        putStr(meta, "job_keywords", j.getJobKeywords());
+        putStr(meta, "job_desc", j.getJobDesc());
+        putStr(meta, "company_industry", j.getCompanyIndustry());
+        putStr(meta, "company_size", j.getCompanySize());
+        putStr(meta, "company_welfare", j.getCompanyWelfare());
+        put(meta, "publish_date", j.getPublishDate());
         meta.put("title", title(j.getJobName(), j.getCompanyName(), j.getCity()));
         return new Document(buildJobText(j.getJobName(), j.getCompanyName(), j.getCity(), j.getEducation(), j.getExperience(), j.getJobKeywords(), j.getJobDesc()), meta);
     }
 
+    /**
+     * 将前程无忧岗位转换为向量文档
+     */
     private Document toDocFrom51(JobInfo51Job j) {
         Map<String, Object> meta = new HashMap<>();
         meta.put("source", "51job");
@@ -121,20 +146,37 @@ public class JobRagIndexer {
         putStr(meta, "city", j.getCity());
         putStr(meta, "education", j.getEducation());
         putStr(meta, "experience", j.getExperience());
+        put(meta, "salary_min", j.getSalaryMin());
+        put(meta, "salary_max", j.getSalaryMax());
+        putStr(meta, "job_keywords", j.getJobKeywords());
+        putStr(meta, "job_desc", j.getJobDesc());
+        putStr(meta, "company_industry", j.getCompanyIndustry());
+        putStr(meta, "company_size", j.getCompanySize());
+        putStr(meta, "company_welfare", j.getCompanyWelfare());
+        put(meta, "publish_date", j.getPublishDate());
         meta.put("title", title(j.getJobName(), j.getCompanyName(), j.getCity()));
         return new Document(buildJobText(j.getJobName(), j.getCompanyName(), j.getCity(), j.getEducation(), j.getExperience(), j.getJobKeywords(), j.getJobDesc()), meta);
     }
 
+    /**
+     * 向元数据中添加非空值
+     */
     private void put(Map<String, Object> meta, String key, Object value) {
         if (value != null) {
             meta.put(key, value);
         }
     }
 
+    /**
+     * 向元数据中添加字符串值（允许空值）
+     */
     private void putStr(Map<String, Object> meta, String key, String value) {
         meta.put(key, value == null ? "" : value);
     }
 
+    /**
+     * 生成文档标题
+     */
     private String title(String jobName, String companyName, String city) {
         String j = jobName == null ? "" : jobName.trim();
         String c = companyName == null ? "" : companyName.trim();
@@ -143,16 +185,19 @@ public class JobRagIndexer {
         return ct.isEmpty() ? base : (base + "（" + ct + "）");
     }
 
+    /**
+     * 构建岗位文本内容，用于向量检索
+     */
     private String buildJobText(String jobName, String companyName, String city,
                                 String education, String experience,
                                 String keywords, String desc) {
         StringBuilder sb = new StringBuilder();
 
-        // 岗位名称 - 最多 100 字符
+        // 岗位名称 - 重复三次增大向量权重，使检索时优先匹配岗位角色
         if (StringUtils.hasText(jobName)) {
             String text = jobName.trim();
             if (text.length() > 100) text = text.substring(0, 100);
-            sb.append("岗位: ").append(text).append("\n");
+            sb.append(text).append(" ").append(text).append(" ").append(text).append("\n");
         }
 
         // 公司名称 - 最多 100 字符

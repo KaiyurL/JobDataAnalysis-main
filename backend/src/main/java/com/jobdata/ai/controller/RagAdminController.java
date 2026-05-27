@@ -1,5 +1,6 @@
-package com.jobdata.ai.rag;
+package com.jobdata.ai.controller;
 
+import com.jobdata.ai.rag.JobRagIndexer;
 import com.jobdata.dto.Result;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -9,6 +10,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
+/**
+ * RAG 管理控制器，提供岗位向量索引的管理接口
+ */
 @RestController
 @RequestMapping("/api/rag")
 public class RagAdminController {
@@ -30,4 +34,3 @@ public class RagAdminController {
         return Result.success(out);
     }
 }
-

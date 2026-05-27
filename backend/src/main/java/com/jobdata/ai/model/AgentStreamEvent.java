@@ -1,7 +1,10 @@
-package com.jobdata.ai;
+package com.jobdata.ai.model;
 
 import java.util.Map;
 
+/**
+ * SSE 流式对话事件：start/delta/end。
+ */
 public class AgentStreamEvent {
     private String type;
     private String text;
@@ -45,4 +48,3 @@ public class AgentStreamEvent {
         this.payload = payload;
     }
 }
-

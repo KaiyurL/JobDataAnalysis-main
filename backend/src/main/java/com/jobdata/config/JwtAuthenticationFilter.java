@@ -1,6 +1,8 @@
 
 package com.jobdata.config;
 
+import com.jobdata.constant.SecurityConstants;
+import com.jobdata.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -34,17 +36,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        String authHeader = request.getHeader("Authorization");
+        String authHeader = request.getHeader(SecurityConstants.AUTHORIZATION_HEADER);
 
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
+        if (authHeader != null && authHeader.startsWith(SecurityConstants.BEARER_PREFIX)) {
+            String token = authHeader.substring(SecurityConstants.BEARER_PREFIX.length());
             if (jwtUtil.validateToken(token)) {
                 String username = jwtUtil.getUsername(token);
                 Long userId = jwtUtil.getUserId(token);
                 String role = jwtUtil.getRole(token);
 
                 String r = role == null ? "" : role.trim().toLowerCase();
-                String authority = "admin".equals(r) ? "ROLE_ADMIN" : "ROLE_USER";
+                String authority = "admin".equals(r) ? SecurityConstants.ROLE_ADMIN : SecurityConstants.ROLE_USER;
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(userId, null,
                                 Collections.singletonList(new SimpleGrantedAuthority(authority)));

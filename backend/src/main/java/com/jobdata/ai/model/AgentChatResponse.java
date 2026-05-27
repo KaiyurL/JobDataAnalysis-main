@@ -1,12 +1,14 @@
-package com.jobdata.ai;
+package com.jobdata.ai.model;
 
 import java.util.List;
 import java.util.Map;
 
+/**
+ * AI 对话响应对象：包含最终文本回复与最终推荐岗位卡片列表。
+ */
 public class AgentChatResponse {
     private String reply;
     private List<Map<String, Object>> jobCards;
-    private List<Map<String, Object>> citations;
 
     public String getReply() {
         return reply;
@@ -23,13 +25,4 @@ public class AgentChatResponse {
     public void setJobCards(List<Map<String, Object>> jobCards) {
         this.jobCards = jobCards;
     }
-
-    public List<Map<String, Object>> getCitations() {
-        return citations;
-    }
-
-    public void setCitations(List<Map<String, Object>> citations) {
-        this.citations = citations;
-    }
 }
-

@@ -1,10 +1,10 @@
 # 招聘数据智能分析与可视化平台
 
-![Java](https://img.shields.io/badge/Java-8-orange.svg)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7-green.svg)
+![Java](https://img.shields.io/badge/Java-21-orange.svg)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-green.svg)
 ![Vue](https://img.shields.io/badge/Vue-3-blue.svg)
 ![Python](https://img.shields.io/badge/Python-3.x-yellow.svg)
-![MySQL](https://img.shields.io/badge/MySQL-8.0-blue.svg)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-blue.svg)
 
 ## 项目简介
 
@@ -18,9 +18,9 @@
 
 | 分类 | 技术 | 版本 |
 |------|------|------|
-| 后端框架 | Spring Boot | 2.7.18 |
+| 后端框架 | Spring Boot | 3.2.12 |
 | 前端框架 | Vue | 3.4.0 |
-| 数据库 | MySQL | 8.0+ |
+| 数据库 | PostgreSQL + pgvector | 15+ |
 | 爬虫 | Python + DrissionPage | 4.0+ |
 | 可视化 | ECharts | 5.4.3 |
 | 组件库 | Element Plus | 2.14.0 |
@@ -35,7 +35,7 @@
 
 ### 🤖 智能分析
 - 薪资预测：基于相似岗位的统计模型（均值±标准差）
-- 岗位匹配：基于技能标签的推荐（Jaccard 相似度）
+- 统一推荐源：语义参考（向量检索）+ 数据库候选检索 + 大模型精排/总结输出
 
 ### ️ 数据采集
 - 支持 BOSS直聘 / 前程无忧 两个平台爬取，前程无忧数据独立入表 `job_info_51job`
@@ -67,36 +67,19 @@ JobDataAnalysis/
 - Python 3.8+
 - MySQL 5.7+
 
-### 1. 数据库配置
+### 1. 数据库配置（PostgreSQL）
 
-数据库连接信息统一放在配置文件中：
-- `crawler/runtime_config.json`（包含 MySQL 连接 + 浏览器路径）
+后端默认使用 PostgreSQL（含 pgvector 向量库），连接信息在：
+- `backend/src/main/resources/application.yml`
+- 支持环境变量：`DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD`
 
-```sql
-CREATE DATABASE IF NOT EXISTS job_data DEFAULT CHARACTER SET utf8mb4;
-
-CREATE TABLE IF NOT EXISTS user (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(50) NOT NULL UNIQUE,
-    password VARCHAR(100) NOT NULL,
-    role VARCHAR(20) DEFAULT 'user',
-    create_time DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-说明：
-- 岗位表 `job_info` / `job_info_51job` 在首次运行爬虫时会自动创建（无需手动执行 schema）
-
-Python 爬虫与 NLP 流水线都会读取 `crawler/runtime_config.json` 的数据库配置（需要和上面的库名保持一致）。
+数据库表与向量库结构由 Flyway 迁移脚本管理（`backend/src/main/resources/db/migration`）。
 
 ### 需要修改的配置（重要）
 
-1) 后端数据库配置（Spring Boot）
+1) 后端数据库配置（Spring Boot / PostgreSQL）
 - 文件：`backend/src/main/resources/application.yml`
-- 需要确认/修改：
-  - `spring.datasource.url`（数据库地址、库名 job_data）
-  - `spring.datasource.username`
-  - `spring.datasource.password`
+- 或通过环境变量配置：`DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD`
 
 2) 爬虫/NLP 数据库与浏览器配置（Python）
 - 文件：`crawler/runtime_config.json`
@@ -116,14 +99,14 @@ Python 爬虫与 NLP 流水线都会读取 `crawler/runtime_config.json` 的数�
   - `browser`: `auto` / `edge` / `chrome`（选择启动浏览器）
   - 浏览器路径（Windows）：在 `crawler/runtime_config.json` 的 `browser.edge_candidates` / `browser.chrome_candidates` 中配置
 
-4) AI 智能求职助手（阿里云百炼）
-- 后端会从系统环境变量读取 API Key（推荐方式）：
-  - `AI_DASHSCOPE_API_KEY`（优先）
-  - 兼容：`BAILIAN_API_KEY`
-- 可选环境变量（不设置则用默认值）：
-  - `BAILIAN_MODEL`（默认 `qwen-plus`）
-  - `BAILIAN_BASE_URL`（默认 `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`）
-  - `BAILIAN_TIMEOUT_MS`（默认 `60000`）
+4) AI 智能求职助手（阿里云百炼 OpenAI 兼容模式）
+- 必需环境变量：
+  - `AI_DASHSCOPE_API_KEY`
+- 可选环境变量：
+  - `AI_BASE_URL`（默认 `https://dashscope.aliyuncs.com/compatible-mode`）
+  - `AI_CHAT_MODEL`（默认 `qwen3.5-omni-plus-2026-03-15`）
+  - `AI_EMBEDDING_MODEL`（默认 `text-embedding-v3`）
+  - `AI_EMBEDDING_DIM`（默认 `1024`）
 
 5) 后端触发爬虫的 Python 解释器
 - 若由后端触发爬虫，建议设置环境变量：

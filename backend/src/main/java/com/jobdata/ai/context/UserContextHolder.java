@@ -1,5 +1,6 @@
 package com.jobdata.ai.context;
 
+// 用户上下文持有者
 public class UserContextHolder {
     private static final ThreadLocal<Long> USER_ID = new ThreadLocal<>();
 

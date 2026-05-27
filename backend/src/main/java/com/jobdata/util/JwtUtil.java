@@ -1,12 +1,13 @@
-
-package com.jobdata.config;
+package com.jobdata.util;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
@@ -14,8 +15,16 @@ import java.util.Map;
 
 @Component
 public class JwtUtil {
-    private static final long EXPIRATION = 7 * 24 * 60 * 60 * 1000; // 7天
-    private static final Key SECRET_KEY = Keys.hmacShaKeyFor("JobDataSecretKeyForJwtToken1234567890123456".getBytes());
+    private final long expirationMs;
+    private final Key secretKey;
+
+    public JwtUtil(
+            @Value("${security.jwt.secret:JobDataSecretKeyForJwtToken1234567890123456}") String secret,
+            @Value("${security.jwt.expiration-ms:604800000}") long expirationMs
+    ) {
+        this.expirationMs = expirationMs;
+        this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+    }
 
     public String generateToken(String username, Long userId, String role) {
         Map<String, Object> claims = new HashMap<>();
@@ -26,14 +35,14 @@ public class JwtUtil {
                 .setClaims(claims)
                 .setSubject(username)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION))
-                .signWith(SECRET_KEY, SignatureAlgorithm.HS256)
+                .setExpiration(new Date(System.currentTimeMillis() + expirationMs))
+                .signWith(secretKey, SignatureAlgorithm.HS256)
                 .compact();
     }
 
     public Claims parseToken(String token) {
         return Jwts.parserBuilder()
-                .setSigningKey(SECRET_KEY)
+                .setSigningKey(secretKey)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();

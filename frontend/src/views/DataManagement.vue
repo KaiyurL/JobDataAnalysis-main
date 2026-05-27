@@ -280,6 +280,28 @@
           </div>
         </el-card>
 
+        <el-card class="reindex-card" shadow="hover" style="margin-top: 20px;">
+          <template #header>
+            <span>🧠 向量索引</span>
+          </template>
+          <div class="reindex-section">
+            <p class="form-tip" style="margin: 0 0 12px 0;">将数据库岗位数据向量化存入索引，供 AI 对话中的 RAG 检索使用。新增岗位后需重建。</p>
+            <el-button
+              type="primary"
+              size="large"
+              @click="handleReindex"
+              :loading="reindexing"
+              style="width: 100%;"
+            >
+              <el-icon><Refresh /></el-icon>
+              重建向量索引
+            </el-button>
+            <div v-if="reindexResult != null" class="reindex-result" style="margin-top: 12px;">
+              <el-tag type="success" effect="plain">已索引 {{ reindexResult }} 个岗位</el-tag>
+            </div>
+          </div>
+        </el-card>
+
         <el-card class="log-card" shadow="hover" style="margin-top: 20px;">
           <template #header>
             <div class="card-header">
@@ -409,6 +431,27 @@ const clearLogs = () => {
   api.clearCrawlerLogs().finally(() => {
     logs.value = []
   })
+}
+
+const reindexing = ref(false)
+const reindexResult = ref(null)
+
+const handleReindex = async () => {
+  reindexing.value = true
+  reindexResult.value = null
+  try {
+    const res = await api.reindexJobs({ source: 'all', limit: 0, reset: true })
+    if (res.data.code !== 200) throw new Error(res.data.message || '重建失败')
+    const data = res.data.data || {}
+    reindexResult.value = data.documents || 0
+    ElMessage.success(`向量索引已重建，共索引 ${data.documents || 0} 个岗位`)
+  } catch (e) {
+    console.error(e)
+    const msg = e?.response?.data?.message || e?.message || '重建索引失败'
+    ElMessage.error('重建索引失败: ' + msg)
+  } finally {
+    reindexing.value = false
+  }
 }
 
 // 配置管理
