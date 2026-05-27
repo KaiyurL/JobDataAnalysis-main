@@ -7,6 +7,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
+/**
+ * 数据管理接口：提供数据概览、更新流程控制与日志管理能力。
+ */
 @RestController
 @RequestMapping("/api/data")
 @CrossOrigin
@@ -15,6 +18,11 @@ public class DataManageController {
     @Autowired
     private DataManageService dataManageService;
 
+    /**
+     * 获取数据概览信息。
+     *
+     * @return 概览数据
+     */
     @GetMapping("/overview")
     public Result<Map<String, Object>> getOverview() {
         try {
@@ -24,6 +32,11 @@ public class DataManageController {
         }
     }
 
+    /**
+     * 启动数据更新任务。
+     *
+     * @return 启动结果/状态
+     */
     @PostMapping("/update")
     public Result<Map<String, Object>> startUpdate() {
         try {
@@ -33,6 +46,11 @@ public class DataManageController {
         }
     }
 
+    /**
+     * 确认登录（用于需要人工登录确认的更新流程）。
+     *
+     * @return 确认结果/状态
+     */
     @PostMapping("/confirm-login")
     public Result<Map<String, Object>> confirmLogin() {
         try {
@@ -42,6 +60,11 @@ public class DataManageController {
         }
     }
 
+    /**
+     * 清空更新日志。
+     *
+     * @return 清空结果
+     */
     @PostMapping("/logs/clear")
     public Result<Map<String, Object>> clearLogs() {
         try {

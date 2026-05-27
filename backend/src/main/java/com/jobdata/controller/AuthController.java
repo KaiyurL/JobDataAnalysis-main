@@ -11,6 +11,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 认证接口：提供登录与注册能力，并签发 JWT。
+ */
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -21,6 +24,12 @@ public class AuthController {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    /**
+     * 用户登录：校验用户名密码，返回 JWT 和用户信息。
+     *
+     * @param request 登录请求
+     * @return 登录结果
+     */
     @PostMapping("/login")
     public Result<LoginResponse> login(@RequestBody LoginRequest request) {
         User user = userService.findByUsername(request.getUsername());
@@ -35,6 +44,12 @@ public class AuthController {
         return Result.success(new LoginResponse(token, userInfo));
     }
 
+    /**
+     * 用户注册：创建新用户。
+     *
+     * @param request 注册请求
+     * @return 注册结果
+     */
     @PostMapping("/register")
     public Result<String> register(@RequestBody LoginRequest request) {
         User existUser = userService.findByUsername(request.getUsername());

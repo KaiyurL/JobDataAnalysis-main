@@ -10,6 +10,9 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
+/**
+ * 数据库初始化器：在应用启动时确保存在可用的测试管理员账号。
+ */
 @Component
 public class DatabaseInit implements CommandLineRunner {
     @Autowired
@@ -17,6 +20,12 @@ public class DatabaseInit implements CommandLineRunner {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    /**
+     * 应用启动回调：检查并创建/修复默认管理员账号。
+     *
+     * @param args 启动参数
+     * @throws Exception 初始化异常
+     */
     @Override
     public void run(String... args) throws Exception {
         // 检查是否已经有admin用户

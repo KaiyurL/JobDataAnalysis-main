@@ -7,6 +7,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * 用户画像实体：对应 user_profile 表。
+ */
 @Data
 @TableName("user_profile")
 public class UserProfile {

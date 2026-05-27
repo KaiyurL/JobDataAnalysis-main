@@ -12,16 +12,32 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 
+/**
+ * 用户服务实现：提供用户查询与创建逻辑，并负责密码加密与默认角色设置。
+ */
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    /**
+     * 按用户名查找用户。
+     *
+     * @param username 用户名
+     * @return 用户（不存在返回 null）
+     */
     @Override
     public User findByUsername(String username) {
         return getOne(new LambdaQueryWrapper<User>().eq(User::getUsername, username));
     }
 
+    /**
+     * 创建普通用户。
+     *
+     * @param username 用户名
+     * @param password 明文密码
+     * @return 创建后的用户
+     */
     @Override
     public User createUser(String username, String password) {
         User user = new User();
@@ -33,4 +49,3 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return user;
     }
 }
-

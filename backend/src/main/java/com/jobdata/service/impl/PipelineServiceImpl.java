@@ -25,6 +25,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Pipeline 服务实现：负责执行 crawler/nlp_job_pipeline.py，并提供状态、日志与产物查询。
+ */
 @Service
 public class PipelineServiceImpl implements PipelineService {
 
@@ -56,11 +59,22 @@ public class PipelineServiceImpl implements PipelineService {
     @Autowired
     private JobInfo51JobMapper jobInfo51JobMapper;
 
+    /**
+     * 启动 dashboard pipeline（非强制）。
+     *
+     * @return 启动结果
+     */
     @Override
     public Map<String, Object> startDashboardPipeline() {
         return startDashboardPipeline(false);
     }
 
+    /**
+     * 启动 dashboard pipeline。
+     *
+     * @param force 是否强制重算（忽略缓存）
+     * @return 启动结果
+     */
     @Override
     public Map<String, Object> startDashboardPipeline(boolean force) {
         Map<String, Object> result = new HashMap<>();
@@ -148,11 +162,22 @@ public class PipelineServiceImpl implements PipelineService {
         }
     }
 
+    /**
+     * 启动 stats pipeline（非强制）。
+     *
+     * @return 启动结果
+     */
     @Override
     public Map<String, Object> startStatsPipeline() {
         return startStatsPipeline(false);
     }
 
+    /**
+     * 启动 stats pipeline。
+     *
+     * @param force 是否强制重算（忽略缓存）
+     * @return 启动结果
+     */
     @Override
     public Map<String, Object> startStatsPipeline(boolean force) {
         Map<String, Object> result = new HashMap<>();
@@ -221,6 +246,11 @@ public class PipelineServiceImpl implements PipelineService {
         }
     }
 
+    /**
+     * 获取 pipeline 当前状态与日志。
+     *
+     * @return 状态信息
+     */
     @Override
     public Map<String, Object> getPipelineStatus() {
         Map<String, Object> result = new HashMap<>();
@@ -236,6 +266,11 @@ public class PipelineServiceImpl implements PipelineService {
         return result;
     }
 
+    /**
+     * 获取 pipeline 上次执行产物与摘要信息。
+     *
+     * @return 产物信息
+     */
     @Override
     public Map<String, Object> getPipelineArtifacts() {
         Map<String, Object> result = new HashMap<>();
@@ -248,6 +283,12 @@ public class PipelineServiceImpl implements PipelineService {
         return result;
     }
 
+    /**
+     * 获取指定 key 对应的产物文件（带目录安全校验，仅允许 output 目录下文件）。
+     *
+     * @param key 产物 key
+     * @return 文件（不存在返回 null）
+     */
     @Override
     public File getArtifactFile(String key) {
         if (key == null || key.trim().isEmpty()) {
@@ -274,6 +315,11 @@ public class PipelineServiceImpl implements PipelineService {
         }
     }
 
+    /**
+     * 写入一行 pipeline 日志并控制最大行数。
+     *
+     * @param line 日志内容
+     */
     private void addLog(String line) {
         Map<String, String> item = new HashMap<>();
         item.put("time", LocalDateTime.now().toString());
@@ -286,6 +332,9 @@ public class PipelineServiceImpl implements PipelineService {
         }
     }
 
+    /**
+     * 执行 dashboard pipeline，并解析脚本输出的 JSON 结果（包含 run_dir 与 artifacts）。
+     */
     private void runDashboard() throws Exception {
         Path crawlerDir = resolveCrawlerDir();
         Path scriptPath = crawlerDir.resolve("nlp_job_pipeline.py").toAbsolutePath().normalize();
@@ -360,6 +409,9 @@ public class PipelineServiceImpl implements PipelineService {
         lastSummary = buildSummary(artifacts, lastErrors);
     }
 
+    /**
+     * 执行 stats pipeline（生成 top tokens 等统计产物）。
+     */
     private void runStats() throws Exception {
         Path crawlerDir = resolveCrawlerDir();
         Path scriptPath = crawlerDir.resolve("nlp_job_pipeline.py").toAbsolutePath().normalize();

@@ -7,6 +7,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * 用户收藏实体：对应 user_favorite_job 表。
+ */
 @Data
 @TableName("user_favorite_job")
 public class UserFavoriteJob {

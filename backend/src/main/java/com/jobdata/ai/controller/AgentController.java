@@ -29,12 +29,26 @@ public class AgentController {
         this.agentChatService = agentChatService;
     }
 
+    /**
+     * 非流式对话：一次性返回完整回复与推荐岗位卡片。
+     *
+     * @param authentication 当前认证信息
+     * @param request 对话请求
+     * @return 对话结果
+     */
     @PostMapping("/chat")
     public Result<AgentChatResponse> chat(Authentication authentication, @RequestBody AiChatRequest request) {
         Long userId = authentication != null && authentication.getPrincipal() instanceof Long ? (Long) authentication.getPrincipal() : null;
         return Result.success(agentChatService.chatOnce(request, userId));
     }
 
+    /**
+     * 流式对话：通过 SSE 按增量推送回复内容，结束事件携带推荐岗位卡片。
+     *
+     * @param authentication 当前认证信息
+     * @param request 对话请求
+     * @return SSE 事件流
+     */
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<AgentStreamEvent>> chatStream(Authentication authentication, @RequestBody AiChatRequest request) {
         Long userId = authentication != null && authentication.getPrincipal() instanceof Long ? (Long) authentication.getPrincipal() : null;

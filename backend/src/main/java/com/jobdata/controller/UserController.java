@@ -22,6 +22,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 用户接口：管理用户画像、收藏、浏览历史与匹配历史等数据。
+ */
 @RestController
 @RequestMapping("/api/user")
 public class UserController {
@@ -36,6 +39,12 @@ public class UserController {
     @Autowired
     private ObjectMapper objectMapper;
 
+    /**
+     * 获取当前用户的画像信息（含简历元信息与扩展信息）。
+     *
+     * @param authentication 当前认证信息（principal 为用户 ID）
+     * @return 用户画像数据
+     */
     @GetMapping("/profile")
     public Result<Map<String, Object>> getProfile(Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
@@ -54,6 +63,13 @@ public class UserController {
         return Result.success(out);
     }
 
+    /**
+     * 新增或更新当前用户画像信息。
+     *
+     * @param authentication 当前认证信息（principal 为用户 ID）
+     * @param payload 请求体（可包含 profile、resumeMeta、profileExtra 字段）
+     * @return 更新后的用户画像数据
+     */
     @PutMapping("/profile")
     public Result<Map<String, Object>> upsertProfile(Authentication authentication, @RequestBody Map<String, Object> payload) {
         Long userId = (Long) authentication.getPrincipal();
@@ -83,6 +99,12 @@ public class UserController {
         return Result.success(out);
     }
 
+    /**
+     * 获取用户收藏列表。
+     *
+     * @param authentication 当前认证信息（principal 为用户 ID）
+     * @return 收藏列表
+     */
     @GetMapping("/favorites")
     public Result<List<UserFavoriteJob>> listFavorites(Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
@@ -94,6 +116,13 @@ public class UserController {
         return Result.success(list);
     }
 
+    /**
+     * 添加收藏（如已存在则返回已存在记录）。
+     *
+     * @param authentication 当前认证信息（principal 为用户 ID）
+     * @param payload 收藏数据（包含 sourceTable/jobUrl 等字段）
+     * @return 收藏记录
+     */
     @PostMapping("/favorites")
     public Result<UserFavoriteJob> addFavorite(Authentication authentication, @RequestBody Map<String, Object> payload) {
         Long userId = (Long) authentication.getPrincipal();
@@ -133,6 +162,14 @@ public class UserController {
         return Result.success(row);
     }
 
+    /**
+     * 取消收藏。
+     *
+     * @param authentication 当前认证信息（principal 为用户 ID）
+     * @param sourceTable 来源表
+     * @param jobUrl 职位链接
+     * @return 是否删除成功
+     */
     @DeleteMapping("/favorites")
     public Result<Boolean> removeFavorite(Authentication authentication, @RequestParam String sourceTable, @RequestParam String jobUrl) {
         Long userId = (Long) authentication.getPrincipal();
@@ -145,6 +182,13 @@ public class UserController {
         return Result.success(ok);
     }
 
+    /**
+     * 获取用户职位浏览历史。
+     *
+     * @param authentication 当前认证信息（principal 为用户 ID）
+     * @param size 返回条数（默认 50，最大 200）
+     * @return 浏览历史列表
+     */
     @GetMapping("/job-history")
     public Result<List<UserJobHistory>> listJobHistory(Authentication authentication, @RequestParam(defaultValue = "50") Integer size) {
         Long userId = (Long) authentication.getPrincipal();
@@ -158,6 +202,13 @@ public class UserController {
         return Result.success(list);
     }
 
+    /**
+     * 记录用户浏览的职位信息（同一 sourceTable+jobUrl 会进行 upsert）。
+     *
+     * @param authentication 当前认证信息（principal 为用户 ID）
+     * @param payload 职位数据（包含 sourceTable/jobUrl 等字段）
+     * @return 浏览历史记录
+     */
     @PostMapping("/job-history")
     public Result<UserJobHistory> recordJobHistory(Authentication authentication, @RequestBody Map<String, Object> payload) {
         Long userId = (Long) authentication.getPrincipal();
@@ -196,6 +247,13 @@ public class UserController {
         return Result.success(row);
     }
 
+    /**
+     * 获取用户匹配历史记录列表。
+     *
+     * @param authentication 当前认证信息（principal 为用户 ID）
+     * @param size 返回条数（默认 20，最大 100）
+     * @return 匹配历史列表
+     */
     @GetMapping("/match-history")
     public Result<List<UserMatchHistory>> listMatchHistory(Authentication authentication, @RequestParam(defaultValue = "20") Integer size) {
         Long userId = (Long) authentication.getPrincipal();
@@ -209,6 +267,13 @@ public class UserController {
         return Result.success(list);
     }
 
+    /**
+     * 获取匹配历史详情（校验记录归属当前用户）。
+     *
+     * @param authentication 当前认证信息（principal 为用户 ID）
+     * @param id 匹配历史记录 ID
+     * @return 匹配详情
+     */
     @GetMapping("/match-history/{id}")
     public Result<Map<String, Object>> getMatchHistoryDetail(Authentication authentication, @PathVariable Long id) {
         Long userId = (Long) authentication.getPrincipal();
@@ -230,6 +295,12 @@ public class UserController {
         return Result.success(out);
     }
 
+    /**
+     * 将对象序列化为 JSON 字符串。
+     *
+     * @param obj 任意对象
+     * @return JSON 字符串（失败返回 null）
+     */
     private String writeJson(Object obj) {
         if (obj == null) return null;
         try {
@@ -239,6 +310,12 @@ public class UserController {
         }
     }
 
+    /**
+     * 读取 JSON 字符串为 Map。
+     *
+     * @param json JSON 字符串
+     * @return Map（失败返回空 Map）
+     */
     private Map<String, Object> readJsonAsMap(String json) {
         if (json == null || json.isBlank()) return new HashMap<>();
         try {
@@ -248,6 +325,12 @@ public class UserController {
         }
     }
 
+    /**
+     * 读取 JSON 字符串为任意对象（Map/List/基本类型等）。
+     *
+     * @param json JSON 字符串
+     * @return 反序列化结果（失败返回 null）
+     */
     private Object readJsonAsObject(String json) {
         if (json == null || json.isBlank()) return null;
         try {
@@ -257,12 +340,24 @@ public class UserController {
         }
     }
 
+    /**
+     * 安全转换为字符串并做 trim。
+     *
+     * @param v 原始值
+     * @return 字符串（可能为 null）
+     */
     private String safeString(Object v) {
         if (v == null) return null;
         String s = String.valueOf(v);
         return s == null ? null : s.trim();
     }
 
+    /**
+     * 安全转换为 Long。
+     *
+     * @param v 原始值
+     * @return Long（可能为 null）
+     */
     private Long safeLong(Object v) {
         if (v == null) return null;
         if (v instanceof Number) return ((Number) v).longValue();
@@ -275,6 +370,12 @@ public class UserController {
         }
     }
 
+    /**
+     * 安全转换为 Integer。
+     *
+     * @param v 原始值
+     * @return Integer（可能为 null）
+     */
     private Integer safeInt(Object v) {
         if (v == null) return null;
         if (v instanceof Number) return ((Number) v).intValue();

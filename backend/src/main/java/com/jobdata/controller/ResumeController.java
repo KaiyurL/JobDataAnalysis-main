@@ -11,6 +11,9 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 简历解析接口：上传简历文件，解析为文本并调用模型抽取结构化信息。
+ */
 @RestController
 @RequestMapping("/api/resume")
 @CrossOrigin(origins = "*")
@@ -21,6 +24,12 @@ public class ResumeController {
     
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /**
+     * 解析简历文件并返回结构化信息（JSON Map）。
+     *
+     * @param file 简历文件（支持 pdf/doc/docx/txt）
+     * @return 结构化简历信息
+     */
     @PostMapping("/parse")
     public Result<Map<String, Object>> parseResume(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
@@ -69,6 +78,13 @@ public class ResumeController {
         }
     }
 
+    /**
+     * 截断文本，用于控制输入长度/输出预览长度。
+     *
+     * @param s 原始字符串
+     * @param maxLen 最大长度
+     * @return 截断后的字符串
+     */
     private static String clipText(String s, int maxLen) {
         if (s == null) {
             return "";

@@ -12,11 +12,19 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 配置服务实现：负责定位 crawler 目录下的 config.json，并提供读取/写入能力。
+ */
 @Service
 public class ConfigServiceImpl implements ConfigService {
     
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /**
+     * 解析 crawler 目录路径（支持在不同启动目录下查找）。
+     *
+     * @return crawler 目录路径
+     */
     private Path resolveCrawlerDir() {
         Path current = Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
         Path[] candidates = new Path[]{
@@ -32,10 +40,20 @@ public class ConfigServiceImpl implements ConfigService {
         return candidates[0].toAbsolutePath().normalize();
     }
 
+    /**
+     * 获取 config.json 文件。
+     *
+     * @return 配置文件
+     */
     private File resolveConfigFile() {
         return resolveCrawlerDir().resolve("config.json").toFile();
     }
     
+    /**
+     * 读取配置；若配置文件不存在则返回默认配置。
+     *
+     * @return 配置键值对
+     */
     @Override
     @SuppressWarnings("unchecked")
     public Map<String, Object> getConfig() {
@@ -124,6 +142,12 @@ public class ConfigServiceImpl implements ConfigService {
         }
     }
     
+    /**
+     * 更新配置并写入文件。
+     *
+     * @param config 新配置
+     * @return 更新后的配置
+     */
     @Override
     public Map<String, Object> updateConfig(Map<String, Object> config) {
         try {

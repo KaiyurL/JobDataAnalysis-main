@@ -7,6 +7,9 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import java.time.LocalDateTime;
 
+/**
+ * 用户实体：对应 users 表。
+ */
 @Data
 @TableName("users")
 public class User {

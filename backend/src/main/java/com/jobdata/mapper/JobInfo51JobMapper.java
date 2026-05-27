@@ -7,8 +7,16 @@ import org.apache.ibatis.annotations.Select;
 
 import java.util.Map;
 
+/**
+ * 51Job 职位表 Mapper：提供 job_info_51job 表的基础 CRUD 操作与数据指纹查询能力。
+ */
 @Mapper
 public interface JobInfo51JobMapper extends BaseMapper<JobInfo51Job> {
+    /**
+     * 获取 job_info_51job 表数据指纹（总数与最新创建时间），用于判断数据是否发生变化。
+     *
+     * @return 指纹信息
+     */
     @Select("SELECT COUNT(*) AS cnt, MAX(created_at) AS maxCreatedAt FROM job_info_51job")
     Map<String, Object> getFingerprint();
 }

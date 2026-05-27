@@ -23,12 +23,18 @@ import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+/**
+ * 职位数据服务实现：基于 MyBatis-Plus 完成职位查询，并在内存中做统计聚合。
+ */
 @Service
 public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> implements JobInfoService {
 
     @Autowired
     private JobInfo51JobService jobInfo51JobService;
 
+    /**
+     * 分页查询职位信息。
+     */
     @Override
     public Page<JobInfo> pageQuery(Integer current, Integer size, String keyword, String city, String education, String experience) {
         Page<JobInfo> page = new Page<>(current, size);
@@ -37,6 +43,15 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
         return this.page(page, wrapper);
     }
 
+    /**
+     * 构造职位查询条件包装器。
+     *
+     * @param keyword 关键词（可选）
+     * @param city 城市（可选，逗号分隔）
+     * @param education 学历（可选）
+     * @param experience 经验（可选）
+     * @return 查询条件
+     */
     private LambdaQueryWrapper<JobInfo> buildQueryWrapper(String keyword, String city, String education, String experience) {
         LambdaQueryWrapper<JobInfo> wrapper = new LambdaQueryWrapper<>();
 
@@ -56,6 +71,9 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
         return wrapper;
     }
 
+    /**
+     * 按城市统计职位数量与平均薪资。
+     */
     @Override
     public List<CitySalaryDTO> getCitySalaryStats(String keyword, String city, String education, String experience) {
         LambdaQueryWrapper<JobInfo> wrapper = buildQueryWrapper(keyword, city, education, experience);
@@ -80,6 +98,9 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
         }).collect(Collectors.toList());
     }
 
+    /**
+     * 按学历统计职位数量与平均薪资。
+     */
     @Override
     public List<EducationSalaryDTO> getEducationSalaryStats(String keyword, String city, String education, String experience) {
         LambdaQueryWrapper<JobInfo> wrapper = buildQueryWrapper(keyword, city, education, experience);
@@ -100,6 +121,9 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
         }).collect(Collectors.toList());
     }
 
+    /**
+     * 按经验统计职位数量与平均薪资。
+     */
     @Override
     public List<ExperienceSalaryDTO> getExperienceSalaryStats(String keyword, String city, String education, String experience) {
         LambdaQueryWrapper<JobInfo> wrapper = buildQueryWrapper(keyword, city, education, experience);
@@ -120,6 +144,9 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
         }).collect(Collectors.toList());
     }
 
+    /**
+     * 统计职位关键词出现次数。
+     */
     @Override
     public List<KeywordDTO> getKeywordStats(String keyword, String city, String education, String experience) {
         LambdaQueryWrapper<JobInfo> wrapper = buildQueryWrapper(keyword, city, education, experience);
@@ -149,6 +176,9 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 按行业统计职位数量。
+     */
     @Override
     public List<IndustryCountDTO> getIndustryStats(String keyword, String city, String education, String experience) {
         LambdaQueryWrapper<JobInfo> wrapper = buildQueryWrapper(keyword, city, education, experience);
@@ -167,103 +197,18 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
           .collect(Collectors.toList());
     }
 
+    /**
+     * 获取符合条件的职位总量。
+     */
     @Override
     public Long getTotalCount(String keyword, String city, String education, String experience) {
         LambdaQueryWrapper<JobInfo> wrapper = buildQueryWrapper(keyword, city, education, experience);
         return this.count(wrapper);
     }
 
-    @Override
-    public SalaryPredictResponse predictSalary(SalaryPredictRequest request) {
-        LambdaQueryWrapper<JobInfo> wrapper = new LambdaQueryWrapper<>();
-
-        if (StringUtils.hasText(request.getEducation())) {
-            wrapper.eq(JobInfo::getEducation, request.getEducation());
-        }
-        if (StringUtils.hasText(request.getExperience())) {
-            wrapper.eq(JobInfo::getExperience, request.getExperience());
-        }
-        if (StringUtils.hasText(request.getCity())) {
-            wrapper.eq(JobInfo::getCity, request.getCity());
-        }
-        if (StringUtils.hasText(request.getKeyword())) {
-            wrapper.like(JobInfo::getJobName, request.getKeyword());
-        }
-
-        wrapper.isNotNull(JobInfo::getSalaryAvg);
-
-        List<JobInfo> bossSimilarJobs = this.list(wrapper);
-
-        LambdaQueryWrapper<JobInfo51Job> wrapper51 = new LambdaQueryWrapper<>();
-        if (StringUtils.hasText(request.getEducation())) {
-            wrapper51.eq(JobInfo51Job::getEducation, request.getEducation());
-        }
-        if (StringUtils.hasText(request.getExperience())) {
-            wrapper51.eq(JobInfo51Job::getExperience, request.getExperience());
-        }
-        if (StringUtils.hasText(request.getCity())) {
-            wrapper51.eq(JobInfo51Job::getCity, request.getCity());
-        }
-        if (StringUtils.hasText(request.getKeyword())) {
-            wrapper51.like(JobInfo51Job::getJobName, request.getKeyword());
-        }
-        wrapper51.isNotNull(JobInfo51Job::getSalaryAvg);
-
-        List<JobInfo51Job> job51SimilarJobs = jobInfo51JobService.list(wrapper51);
-
-        SalaryPredictResponse response = new SalaryPredictResponse();
-
-        if (bossSimilarJobs.isEmpty() && job51SimilarJobs.isEmpty()) {
-            response.setSalaryMinPredicted(new java.math.BigDecimal(0));
-            response.setSalaryMaxPredicted(new java.math.BigDecimal(0));
-            response.setSimilarJobs(new ArrayList<>());
-            return response;
-        }
-
-        List<JobInfo> similarJobs = new ArrayList<>();
-        similarJobs.addAll(bossSimilarJobs);
-        for (JobInfo51Job job : job51SimilarJobs) {
-            JobInfo mapped = new JobInfo();
-            mapped.setId(job.getId());
-            mapped.setJobName(job.getJobName());
-            mapped.setCompanyName(job.getCompanyName());
-            mapped.setCity(job.getCity());
-            mapped.setSalaryMin(job.getSalaryMin());
-            mapped.setSalaryMax(job.getSalaryMax());
-            mapped.setSalaryAvg(job.getSalaryAvg());
-            mapped.setExperience(job.getExperience());
-            mapped.setEducation(job.getEducation());
-            mapped.setJobUrl(job.getJobUrl());
-            similarJobs.add(mapped);
-        }
-
-        List<Double> salaries = similarJobs.stream()
-                .filter(job -> job.getSalaryAvg() != null)
-                .map(job -> job.getSalaryAvg().doubleValue())
-                .collect(Collectors.toList());
-
-        double mean = salaries.stream().mapToDouble(Double::doubleValue).average().orElse(0);
-        double variance = salaries.stream()
-                .mapToDouble(d -> Math.pow(d - mean, 2))
-                .average().orElse(0);
-        double stdDev = Math.sqrt(variance);
-
-        double minPred = Math.max(0, mean - stdDev);
-        double maxPred = mean + stdDev;
-
-        response.setSalaryMinPredicted(new java.math.BigDecimal(Math.round(minPred * 100.0) / 100.0));
-        response.setSalaryMaxPredicted(new java.math.BigDecimal(Math.round(maxPred * 100.0) / 100.0));
-
-        List<JobInfo> topSimilar = similarJobs.stream()
-                .filter(job -> job.getSalaryAvg() != null)
-                .sorted((a, b) -> b.getSalaryAvg().compareTo(a.getSalaryAvg()))
-                .limit(5)
-                .collect(Collectors.toList());
-        response.setSimilarJobs(topSimilar);
-
-        return response;
-    }
-
+    /**
+     * 获取热门公司统计（聚合多个职位来源）。
+     */
     @Override
     public List<CompanyHotDTO> getCompanyHotStats() {
         Map<String, Integer> companyCount = new HashMap<>();
@@ -289,6 +234,9 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
           .collect(Collectors.toList());
     }
 
+    /**
+     * 获取公司平均薪资统计（聚合多个职位来源）。
+     */
     @Override
     public List<CompanySalaryDTO> getCompanySalaryStats() {
         Map<String, double[]> agg = new HashMap<>();
@@ -322,6 +270,9 @@ public class JobInfoServiceImpl extends ServiceImpl<JobInfoMapper, JobInfo> impl
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 获取公司规模分布统计（聚合多个职位来源）。
+     */
     @Override
     public List<CompanySizeDTO> getCompanySizeStats() {
         Map<String, Integer> sizeCount = new HashMap<>();

@@ -17,6 +17,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.File;
 import java.nio.file.Files;
 
+/**
+ * Pipeline 接口：用于触发离线任务（如 dashboard/stats）并查询任务状态与产物文件。
+ */
 @RestController
 @RequestMapping("/api/pipeline")
 @CrossOrigin
@@ -25,6 +28,12 @@ public class PipelineController {
     @Autowired
     private PipelineService pipelineService;
 
+    /**
+     * 触发 dashboard 相关的离线任务。
+     *
+     * @param force 是否强制重新执行
+     * @return 执行结果/状态
+     */
     @PostMapping("/dashboard/run")
     public Result<?> runDashboard(@RequestParam(value = "force", required = false, defaultValue = "false") boolean force) {
         try {
@@ -34,6 +43,12 @@ public class PipelineController {
         }
     }
 
+    /**
+     * 触发 stats 相关的离线任务。
+     *
+     * @param force 是否强制重新执行
+     * @return 执行结果/状态
+     */
     @PostMapping("/stats/run")
     public Result<?> runStats(@RequestParam(value = "force", required = false, defaultValue = "false") boolean force) {
         try {
@@ -43,6 +58,11 @@ public class PipelineController {
         }
     }
 
+    /**
+     * 获取当前 Pipeline 执行状态。
+     *
+     * @return 状态信息
+     */
     @GetMapping("/status")
     public Result<?> status() {
         try {
@@ -52,6 +72,11 @@ public class PipelineController {
         }
     }
 
+    /**
+     * 获取 Pipeline 产物列表（如图表、数据文件等）。
+     *
+     * @return 产物信息
+     */
     @GetMapping("/artifacts")
     public Result<?> artifacts() {
         try {
@@ -61,6 +86,12 @@ public class PipelineController {
         }
     }
 
+    /**
+     * 按 key 获取指定产物文件内容。
+     *
+     * @param key 产物标识
+     * @return 文件字节内容响应
+     */
     @GetMapping("/file")
     public ResponseEntity<byte[]> file(@RequestParam("key") String key) {
         try {
@@ -79,6 +110,12 @@ public class PipelineController {
         }
     }
 
+    /**
+     * 根据文件名猜测 Content-Type。
+     *
+     * @param name 文件名
+     * @return MediaType
+     */
     private MediaType guessContentType(String name) {
         String n = name == null ? "" : name.toLowerCase();
         if (n.endsWith(".png")) {

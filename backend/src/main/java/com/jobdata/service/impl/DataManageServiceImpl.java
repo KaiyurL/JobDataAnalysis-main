@@ -21,6 +21,9 @@ import java.time.format.DateTimeFormatter;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
+/**
+ * 数据管理服务实现：提供数据概览查询，以及触发/控制爬虫更新流程（含日志与登录确认）。
+ */
 @Service
 public class DataManageServiceImpl implements DataManageService {
 
@@ -30,7 +33,6 @@ public class DataManageServiceImpl implements DataManageService {
     @Autowired
     private JobInfo51JobMapper jobInfo51JobMapper;
 
-    private static final String[] KEYWORDS = {"Java", "Python", "前端", "数据分析", "产品经理"};
     private static final String PYTHON_CMD = "python";
 
     // 状态: idle, running, failed
@@ -50,6 +52,11 @@ public class DataManageServiceImpl implements DataManageService {
     // 防止并发
     private final Object lock = new Object();
 
+    /**
+     * 写入一行爬虫日志（带时间戳），并做最大行数控制。
+     *
+     * @param text 日志内容
+     */
     private void addCrawlerLog(String text) {
         if (text == null) {
             return;
@@ -69,12 +76,22 @@ public class DataManageServiceImpl implements DataManageService {
         }
     }
 
+    /**
+     * 获取日志快照。
+     *
+     * @return 日志列表
+     */
     private List<Map<String, String>> snapshotLogs() {
         synchronized (crawlerLogs) {
             return new ArrayList<>(crawlerLogs);
         }
     }
 
+    /**
+     * 获取数据概览：包含记录总数、最近更新时间、爬虫状态与日志等。
+     *
+     * @return 概览数据
+     */
     @Override
     public Map<String, Object> getDataOverview() {
         Map<String, Object> result = new HashMap<>();
@@ -112,15 +129,6 @@ public class DataManageServiceImpl implements DataManageService {
         }
         result.put("lastCrawlTime", lastCrawlTime);
 
-        // 关键词分布统计
-        Map<String, Integer> keywordCounts = new HashMap<>();
-        for (String keyword : KEYWORDS) {
-            LambdaQueryWrapper<JobInfo> kwWrapper = new LambdaQueryWrapper<>();
-            kwWrapper.like(JobInfo::getJobName, keyword);
-            keywordCounts.put(keyword, Math.toIntExact(jobInfoMapper.selectCount(kwWrapper)));
-        }
-        result.put("keywordCounts", keywordCounts);
-
         // 状态
         result.put("status", crawlerStatus);
         result.put("lastMessage", lastMessage);
@@ -139,6 +147,11 @@ public class DataManageServiceImpl implements DataManageService {
         return result;
     }
 
+    /**
+     * 启动更新：若爬虫正在运行则返回失败；否则异步启动爬虫流程。
+     *
+     * @return 启动结果与提示信息
+     */
     @Override
     public Map<String, Object> startUpdate() {
         Map<String, Object> result = new HashMap<>();
@@ -184,6 +197,11 @@ public class DataManageServiceImpl implements DataManageService {
         return result;
     }
 
+    /**
+     * 清空爬虫日志缓冲区。
+     *
+     * @return 清空结果
+     */
     @Override
     public Map<String, Object> clearLogs() {
         Map<String, Object> result = new HashMap<>();
@@ -195,6 +213,12 @@ public class DataManageServiceImpl implements DataManageService {
         return result;
     }
 
+    /**
+     * 读取爬虫配置文件（crawler/config.json）。
+     *
+     * @param crawlerDir crawler 目录
+     * @return 配置 Map（读取失败返回 null）
+     */
     private Map<String, Object> readCrawlerConfig(Path crawlerDir) {
         try {
             Path configPath = crawlerDir.resolve("config.json");
@@ -210,6 +234,9 @@ public class DataManageServiceImpl implements DataManageService {
         }
     }
 
+    /**
+     * 执行爬虫脚本 spider.py，实时收集输出日志并处理“等待登录”等状态。
+     */
     private void runSpider() throws Exception {
         Path crawlerDir = resolveCrawlerDir();
         Path spiderPath = crawlerDir.resolve("spider.py").toAbsolutePath().normalize();
@@ -269,6 +296,11 @@ public class DataManageServiceImpl implements DataManageService {
         }
     }
 
+    /**
+     * 发送继续信号（回车）给正在运行的爬虫进程，用于完成登录/验证后继续抓取。
+     *
+     * @return 发送结果
+     */
     @Override
     public Map<String, Object> confirmLogin() {
         Map<String, Object> result = new HashMap<>();
@@ -295,6 +327,11 @@ public class DataManageServiceImpl implements DataManageService {
         }
     }
 
+    /**
+     * 解析 crawler 目录路径（支持在不同启动目录下查找）。
+     *
+     * @return crawler 目录路径
+     */
     private Path resolveCrawlerDir() {
         Path current = Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
         List<Path> candidates = Arrays.asList(
@@ -311,6 +348,12 @@ public class DataManageServiceImpl implements DataManageService {
         return candidates.get(0).toAbsolutePath().normalize();
     }
 
+    /**
+     * 解析可用的 Python 可执行文件路径（环境变量、conda、虚拟环境优先）。
+     *
+     * @param crawlerDir crawler 目录
+     * @return python 可执行文件
+     */
     private String resolvePythonExecutable(Path crawlerDir) {
         String configured = System.getenv("JOBDATA_PYTHON");
         if (configured != null && !configured.trim().isEmpty()) {
@@ -345,6 +388,12 @@ public class DataManageServiceImpl implements DataManageService {
         return PYTHON_CMD;
     }
 
+    /**
+     * 确保爬虫依赖已安装（根据 requirements.txt 安装）。
+     *
+     * @param crawlerDir crawler 目录
+     * @param python python 可执行文件
+     */
     private void ensureCrawlerDependencies(Path crawlerDir, String python) throws Exception {
         Path requirements = crawlerDir.resolve("requirements.txt");
         if (!requirements.toFile().exists()) {
@@ -374,6 +423,12 @@ public class DataManageServiceImpl implements DataManageService {
         }
     }
 
+    /**
+     * 确保 pip 可用（无 pip 时尝试 ensurepip）。
+     *
+     * @param workDir 工作目录
+     * @param python python 可执行文件
+     */
     private void ensurePipAvailable(Path workDir, String python) throws Exception {
         if (checkPythonModule(python, workDir, "pip")) {
             return;
@@ -398,6 +453,14 @@ public class DataManageServiceImpl implements DataManageService {
         throw new RuntimeException("当前 Python 环境缺少 pip，请在启动后端前设置环境变量 JOBDATA_PYTHON 指向 conda 的 python.exe（或创建 crawler/.venv）。当前: " + python);
     }
 
+    /**
+     * 检测 python 环境是否可 import 指定模块。
+     *
+     * @param python python 可执行文件
+     * @param workDir 工作目录
+     * @param moduleName 模块名
+     * @return 是否可用
+     */
     private boolean checkPythonModule(String python, Path workDir, String moduleName) {
         try {
             ProcessBuilder pb = new ProcessBuilder(python, "-c", "import " + moduleName);

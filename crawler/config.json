@@ -1,10 +1,10 @@
 {
   "platform" : "boss",
-  "keywords" : [ "java", "小程序", "ai" ],
-  "cities" : [ "厦门", "北京", "福州", "上海", "广州", "深圳", "杭州", "成都" ],
-  "pages_per_keyword" : 4,
+  "keywords" : [ "后端" ],
+  "cities" : [ "厦门", "北京", "福州", "上海", "广州", "深圳", "杭州", "成都", "武汉", "西安", "重庆" ],
+  "pages_per_keyword" : 6,
   "pages_per_city_51job" : 1,
-  "delay_min" : 4,
+  "delay_min" : 5,
   "delay_max" : 8,
   "city_codes_51job" : {
     "北京" : "010000",

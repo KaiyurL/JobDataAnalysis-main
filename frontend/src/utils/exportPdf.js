@@ -12,10 +12,10 @@ export async function exportToPDF(elementId, filename = 'export.pdf') {
     // 获取原始的滚动位置
     const originalScrollTop = window.pageYOffset
     const originalScrollLeft = window.pageXOffset
-    
+
     // 临时调整滚动以确保完整捕获
     window.scrollTo(0, 0)
-    
+
     const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
@@ -25,7 +25,7 @@ export async function exportToPDF(elementId, filename = 'export.pdf') {
       scrollX: 0,
       scrollY: 0
     })
-    
+
     // 恢复原始滚动位置
     window.scrollTo(originalScrollLeft, originalScrollTop)
 
@@ -42,16 +42,9 @@ export async function exportToPDF(elementId, filename = 'export.pdf') {
       if (!firstPage) {
         pdf.addPage()
       }
-      
-      pdf.addImage(
-        canvas,
-        'JPEG',
-        0,
-        position,
-        imgWidth,
-        imgHeight
-      )
-      
+
+      pdf.addImage(canvas, 'JPEG', 0, position, imgWidth, imgHeight)
+
       heightLeft -= pageHeight
       position = heightLeft
       firstPage = false
@@ -101,14 +94,7 @@ export async function exportToPDFMultiPage(elementId, filename = 'export.pdf') {
       pdf.addImage(canvas, 'JPEG', 0, 0, imgWidth, imgHeight)
     } else {
       while (heightLeft > 0) {
-        pdf.addImage(
-          canvas,
-          'JPEG',
-          0,
-          position,
-          imgWidth,
-          imgHeight
-        )
+        pdf.addImage(canvas, 'JPEG', 0, position, imgWidth, imgHeight)
         heightLeft -= pageHeight
         if (heightLeft > 0) {
           position = heightLeft

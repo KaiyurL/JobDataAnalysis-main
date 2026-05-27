@@ -10,6 +10,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+/**
+ * 职位实体：对应 job_info 表。
+ */
 @Data
 @TableName("job_info")
 public class JobInfo implements Serializable {

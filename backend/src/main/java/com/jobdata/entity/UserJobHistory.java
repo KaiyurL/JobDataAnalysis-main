@@ -7,6 +7,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * 用户浏览历史实体：对应 user_job_history 表。
+ */
 @Data
 @TableName("user_job_history")
 public class UserJobHistory {

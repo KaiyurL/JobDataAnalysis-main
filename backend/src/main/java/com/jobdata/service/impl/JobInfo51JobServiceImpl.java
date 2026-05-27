@@ -13,9 +13,15 @@ import org.springframework.util.StringUtils;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * 51Job 职位数据服务实现：基于 MyBatis-Plus 完成查询，并在内存中聚合统计数据。
+ */
 @Service
 public class JobInfo51JobServiceImpl extends ServiceImpl<JobInfo51JobMapper, JobInfo51Job> implements JobInfo51JobService {
 
+    /**
+     * 分页查询 51Job 职位信息。
+     */
     @Override
     public Page<JobInfo51Job> pageQuery(Integer current, Integer size, String keyword, String city, String education, String experience) {
         Page<JobInfo51Job> page = new Page<>(current, size);
@@ -24,6 +30,9 @@ public class JobInfo51JobServiceImpl extends ServiceImpl<JobInfo51JobMapper, Job
         return this.page(page, wrapper);
     }
 
+    /**
+     * 构造 51Job 职位查询条件包装器。
+     */
     private LambdaQueryWrapper<JobInfo51Job> buildQueryWrapper(String keyword, String city, String education, String experience) {
         LambdaQueryWrapper<JobInfo51Job> wrapper = new LambdaQueryWrapper<>();
 
@@ -43,6 +52,9 @@ public class JobInfo51JobServiceImpl extends ServiceImpl<JobInfo51JobMapper, Job
         return wrapper;
     }
 
+    /**
+     * 按城市统计职位数量与平均薪资。
+     */
     @Override
     public List<CitySalaryDTO> getCitySalaryStats(String keyword, String city, String education, String experience) {
         LambdaQueryWrapper<JobInfo51Job> wrapper = buildQueryWrapper(keyword, city, education, experience);
@@ -65,6 +77,9 @@ public class JobInfo51JobServiceImpl extends ServiceImpl<JobInfo51JobMapper, Job
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 按学历统计职位数量与平均薪资。
+     */
     @Override
     public List<EducationSalaryDTO> getEducationSalaryStats(String keyword, String city, String education, String experience) {
         LambdaQueryWrapper<JobInfo51Job> wrapper = buildQueryWrapper(keyword, city, education, experience);
@@ -85,6 +100,9 @@ public class JobInfo51JobServiceImpl extends ServiceImpl<JobInfo51JobMapper, Job
         }).collect(Collectors.toList());
     }
 
+    /**
+     * 按经验统计职位数量与平均薪资。
+     */
     @Override
     public List<ExperienceSalaryDTO> getExperienceSalaryStats(String keyword, String city, String education, String experience) {
         LambdaQueryWrapper<JobInfo51Job> wrapper = buildQueryWrapper(keyword, city, education, experience);
@@ -105,6 +123,9 @@ public class JobInfo51JobServiceImpl extends ServiceImpl<JobInfo51JobMapper, Job
         }).collect(Collectors.toList());
     }
 
+    /**
+     * 统计职位关键词出现次数。
+     */
     @Override
     public List<KeywordDTO> getKeywordStats(String keyword, String city, String education, String experience) {
         LambdaQueryWrapper<JobInfo51Job> wrapper = buildQueryWrapper(keyword, city, education, experience);
@@ -134,6 +155,9 @@ public class JobInfo51JobServiceImpl extends ServiceImpl<JobInfo51JobMapper, Job
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 按行业统计职位数量。
+     */
     @Override
     public List<IndustryCountDTO> getIndustryStats(String keyword, String city, String education, String experience) {
         LambdaQueryWrapper<JobInfo51Job> wrapper = buildQueryWrapper(keyword, city, education, experience);
@@ -152,6 +176,9 @@ public class JobInfo51JobServiceImpl extends ServiceImpl<JobInfo51JobMapper, Job
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 获取符合条件的职位总量。
+     */
     @Override
     public Long getTotalCount(String keyword, String city, String education, String experience) {
         LambdaQueryWrapper<JobInfo51Job> wrapper = buildQueryWrapper(keyword, city, education, experience);

@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 51Job 职位数据接口：提供职位分页查询与统计分析数据。
+ */
 @RestController
 @RequestMapping("/api/jobs51")
 @CrossOrigin(origins = "*")
@@ -18,6 +21,17 @@ public class JobInfo51JobController {
     @Autowired
     private JobInfo51JobService jobInfo51JobService;
 
+    /**
+     * 分页查询 51Job 职位信息，支持关键词与条件筛选。
+     *
+     * @param current 当前页
+     * @param size 每页数量
+     * @param keyword 关键词（可选）
+     * @param city 城市（可选）
+     * @param education 学历（可选）
+     * @param experience 经验（可选）
+     * @return 分页结果
+     */
     @GetMapping("/page")
     public Result<Page<JobInfo51Job>> pageQuery(
             @RequestParam(defaultValue = "1") Integer current,
@@ -30,6 +44,15 @@ public class JobInfo51JobController {
         return Result.success(page);
     }
 
+    /**
+     * 获取 51Job 职位统计总览数据（总量、城市薪资、学历薪资、经验薪资、关键词、行业等）。
+     *
+     * @param keyword 关键词（可选）
+     * @param city 城市（可选）
+     * @param education 学历（可选）
+     * @param experience 经验（可选）
+     * @return 总览统计数据
+     */
     @GetMapping("/stats/overview")
     public Result<Map<String, Object>> getOverview(
             @RequestParam(required = false) String keyword,

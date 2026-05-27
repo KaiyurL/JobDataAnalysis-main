@@ -39,6 +39,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 简历解析服务实现：支持 PDF/DOC/DOCX/TXT 文本提取，并可调用百炼模型抽取结构化 Profile。
+ */
 @Service
 public class ResumeServiceImpl implements ResumeService {
 
@@ -53,6 +56,13 @@ public class ResumeServiceImpl implements ResumeService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
+    /**
+     * 解析简历文件为纯文本：优先直接提取文字，必要时尝试 OCR。
+     *
+     * @param file 简历文件
+     * @return 纯文本内容
+     * @throws Exception 解析异常
+     */
     @Override
     public String parseResumeFileToText(MultipartFile file) throws Exception {
         String filename = file.getOriginalFilename();
@@ -396,6 +406,13 @@ public class ResumeServiceImpl implements ResumeService {
         return t.trim();
     }
 
+    /**
+     * 将简历文本提交给百炼模型，抽取结构化 Profile（JSON 字符串）。
+     *
+     * @param text 简历纯文本
+     * @return 结构化 Profile（JSON）
+     * @throws Exception 调用异常
+     */
     @Override
     public String extractProfileFromText(String text) throws Exception {
         String apiKey = StringUtils.hasText(apiKeyFromConfig) ? apiKeyFromConfig.trim() : "";

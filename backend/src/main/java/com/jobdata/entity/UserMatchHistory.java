@@ -7,6 +7,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * 用户匹配历史实体：对应 user_match_history 表。
+ */
 @Data
 @TableName("user_match_history")
 public class UserMatchHistory {
