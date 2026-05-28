@@ -108,9 +108,10 @@
         <div class="form-tip">从下拉选择或直接输入搜索</div>
       </el-form-item>
 
-      <el-form-item label="爬取页数">
-        <el-input-number v-model="config.pages_per_keyword" :min="1" :max="10" />
-        <span style="margin-left: 10px">页/关键词</span>
+      <el-form-item v-if="config.platform !== '51job'" label="BOSS滚动次数">
+        <el-input-number v-model="config.pages_per_keyword" :min="1" :max="200" />
+        <span style="margin-left: 10px">次/关键词</span>
+        <div class="form-tip">用于滚动加载岗位卡片（不是传统页码）</div>
       </el-form-item>
 
       <el-form-item v-if="config.platform !== 'boss'" label="前程无忧页数">
@@ -149,7 +150,7 @@
         <div class="form-tip">只对前程无忧有效；用于 jobArea 参数</div>
       </el-form-item>
 
-      <el-form-item label="请求延迟">
+      <el-form-item label="请求页面延迟">
         <el-input-number v-model="config.delay_min" :min="1" :max="20" style="width: 120px" />
         <span style="margin: 0 10px">-</span>
         <el-input-number v-model="config.delay_max" :min="config.delay_min" :max="30" style="width: 120px" />

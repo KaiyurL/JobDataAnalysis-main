@@ -20,6 +20,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 数据管理服务实现：提供数据概览查询，以及触发/控制爬虫更新流程（含日志与登录确认）。
@@ -42,6 +43,7 @@ public class DataManageServiceImpl implements DataManageService {
     private volatile Integer lastExitCode = null;
     private volatile String lastMessage = "暂无更新记录";
     private volatile boolean waitingForLogin = false;
+    private volatile boolean stopRequested = false;
 
     private volatile Process currentProcess = null;
     private volatile OutputStream currentStdin = null;
@@ -169,6 +171,7 @@ public class DataManageServiceImpl implements DataManageService {
             lastExitCode = null;
             lastMessage = "更新任务已启动...";
             waitingForLogin = false;
+            stopRequested = false;
             synchronized (crawlerLogs) {
                 crawlerLogs.clear();
             }
@@ -179,16 +182,30 @@ public class DataManageServiceImpl implements DataManageService {
         new Thread(() -> {
             try {
                 runSpider();
-                crawlerStatus = "idle";
-                lastEndTime = LocalDateTime.now();
-                lastMessage = "上次更新成功 - " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                addCrawlerLog("爬取结束：成功");
+                if (stopRequested) {
+                    crawlerStatus = "idle";
+                    lastEndTime = LocalDateTime.now();
+                    lastMessage = "已停止";
+                    addCrawlerLog("爬取结束：已停止");
+                } else {
+                    crawlerStatus = "idle";
+                    lastEndTime = LocalDateTime.now();
+                    lastMessage = "上次更新成功 - " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                    addCrawlerLog("爬取结束：成功");
+                }
             } catch (Exception e) {
-                crawlerStatus = "failed";
-                lastEndTime = LocalDateTime.now();
-                lastMessage = "更新失败: " + e.getMessage();
-                addCrawlerLog("爬取结束：失败 - " + e.getMessage());
-                e.printStackTrace();
+                if (stopRequested) {
+                    crawlerStatus = "idle";
+                    lastEndTime = LocalDateTime.now();
+                    lastMessage = "已停止";
+                    addCrawlerLog("爬取结束：已停止");
+                } else {
+                    crawlerStatus = "failed";
+                    lastEndTime = LocalDateTime.now();
+                    lastMessage = "更新失败: " + e.getMessage();
+                    addCrawlerLog("爬取结束：失败 - " + e.getMessage());
+                    e.printStackTrace();
+                }
             }
         }).start();
 
@@ -291,7 +308,7 @@ public class DataManageServiceImpl implements DataManageService {
         currentProcess = null;
         currentStdin = null;
         waitingForLogin = false;
-        if (exitCode != 0) {
+        if (exitCode != 0 && !stopRequested) {
             throw new RuntimeException("爬虫执行失败，退出码: " + exitCode);
         }
     }
@@ -322,6 +339,48 @@ public class DataManageServiceImpl implements DataManageService {
             } catch (Exception e) {
                 result.put("success", false);
                 result.put("message", "发送继续信号失败: " + e.getMessage());
+                return result;
+            }
+        }
+    }
+
+    @Override
+    public Map<String, Object> stopUpdate() {
+        Map<String, Object> result = new HashMap<>();
+        synchronized (lock) {
+            if (!"running".equals(crawlerStatus) || currentProcess == null) {
+                result.put("success", false);
+                result.put("message", "当前没有正在运行的爬虫进程");
+                return result;
+            }
+
+            stopRequested = true;
+            waitingForLogin = false;
+            lastMessage = "已请求停止爬虫...";
+            addCrawlerLog("[UI] 已请求停止爬虫");
+
+            try {
+                if (currentStdin != null) {
+                    try {
+                        currentStdin.close();
+                    } catch (Exception ignored) {
+                    }
+                }
+
+                currentProcess.destroy();
+                if (currentProcess.isAlive()) {
+                    currentProcess.waitFor(2, TimeUnit.SECONDS);
+                }
+                if (currentProcess.isAlive()) {
+                    currentProcess.destroyForcibly();
+                }
+
+                result.put("success", true);
+                result.put("message", "停止指令已发送");
+                return result;
+            } catch (Exception e) {
+                result.put("success", false);
+                result.put("message", "停止失败: " + e.getMessage());
                 return result;
             }
         }

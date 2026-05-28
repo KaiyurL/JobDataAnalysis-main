@@ -1,7 +1,6 @@
 package com.jobdata.ai.controller;
 
 import com.jobdata.ai.rag.JobRagIndexer;
-import com.jobdata.ai.rag.JobDataCleanupService;
 import com.jobdata.dto.Result;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,11 +18,9 @@ import java.util.Map;
 public class RagAdminController {
 
     private final JobRagIndexer jobRagIndexer;
-    private final JobDataCleanupService jobDataCleanupService;
 
-    public RagAdminController(JobRagIndexer jobRagIndexer, JobDataCleanupService jobDataCleanupService) {
+    public RagAdminController(JobRagIndexer jobRagIndexer) {
         this.jobRagIndexer = jobRagIndexer;
-        this.jobDataCleanupService = jobDataCleanupService;
     }
 
     /**
@@ -42,9 +39,7 @@ public class RagAdminController {
             @RequestParam(defaultValue = "0") Integer limit,
             @RequestParam(defaultValue = "true") Boolean reset
     ) {
-        Map<String, Object> dedup = jobDataCleanupService.dedupeJobUrl(source);
         Map<String, Object> out = jobRagIndexer.reindexJobs(source, limit, Boolean.TRUE.equals(reset));
-        out.put("dedup", dedup);
         return Result.success(out);
     }
 }

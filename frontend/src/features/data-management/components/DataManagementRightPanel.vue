@@ -27,6 +27,17 @@
         我已登录，继续爬取
       </el-button>
 
+      <el-button
+        v-if="canStop"
+        type="warning"
+        size="large"
+        :loading="stopping"
+        style="width: 100%; height: 50px; margin-top: 12px"
+        @click="stopUpdate"
+      >
+        停止爬虫
+      </el-button>
+
       <div class="tips">
         <p>⚠️ 注意：点击后将启动爬虫脚本，过程可能需要几分钟</p>
         <p>💡 请先保存配置，再启动爬虫</p>
@@ -65,13 +76,10 @@
       <p class="form-tip" style="margin: 0 0 12px 0">将数据库岗位数据向量化存入索引，供 AI 对话中的 RAG 检索使用。新增岗位后需重建。</p>
       <el-button type="primary" size="large" :loading="reindexing" style="width: 100%" @click="handleReindex">
         <el-icon><Refresh /></el-icon>
-        清洗重复数据和重建向量索引
+        重建向量索引
       </el-button>
-      <div v-if="reindexResult != null || reindexDedup != null" style="margin-top: 12px" class="reindex-result">
+      <div v-if="reindexResult != null" style="margin-top: 12px" class="reindex-result">
         <el-tag v-if="reindexResult != null" type="success" effect="plain">已索引 {{ reindexResult }} 个岗位</el-tag>
-        <el-tag v-if="reindexDedup != null" type="info" effect="plain" style="margin-left: 8px">
-          已清洗重复数据 {{ reindexDedup.totalDeleted }} 条
-        </el-tag>
       </div>
     </div>
   </el-card>
@@ -106,15 +114,17 @@ defineProps({
   updating: { type: Boolean, required: true },
   buttonDisabled: { type: Boolean, required: true },
   canConfirmLogin: { type: Boolean, required: true },
+  canStop: { type: Boolean, required: true },
   expectedRequests: { type: Number, required: true },
   config: { type: Object, required: true },
   logs: { type: Array, required: true },
   setLogContainer: { type: Function, required: true },
   reindexing: { type: Boolean, required: true },
   reindexResult: { type: Number, required: false, default: undefined },
-  reindexDedup: { type: Object, required: false, default: undefined },
+  stopping: { type: Boolean, required: true },
   startUpdate: { type: Function, required: true },
   confirmLogin: { type: Function, required: true },
+  stopUpdate: { type: Function, required: true },
   handleReindex: { type: Function, required: true },
   clearLogs: { type: Function, required: true }
 })

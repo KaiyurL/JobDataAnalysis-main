@@ -52,6 +52,10 @@ export const confirmCrawlerLogin = () => http.post('/data/confirm-login')
  */
 export const confirmCrawlerLoginData = () => requestApi(confirmCrawlerLogin(), '确认失败')
 
+export const stopDataUpdate = () => http.post('/data/stop')
+
+export const stopDataUpdateData = () => requestApi(stopDataUpdate(), '停止失败')
+
 /**
  * 清理后端采集日志（通常用于页面“清空日志”按钮）。
  *

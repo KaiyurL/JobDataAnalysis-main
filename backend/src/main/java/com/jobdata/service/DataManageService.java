@@ -27,6 +27,8 @@ public interface DataManageService {
      */
     Map<String, Object> confirmLogin();
 
+    Map<String, Object> stopUpdate();
+
     /**
      * 清空日志。
      *

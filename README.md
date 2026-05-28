@@ -61,11 +61,11 @@ JobDataAnalysis/
 ## 本地运行步骤
 
 ### 环境要求
-- JDK 8+
+- JDK 21（后端 `backend/pom.xml` 指定 `java.version=21`）
 - Maven 3.x
-- Node.js 16+
+- Node.js 18+
 - Python 3.8+
-- MySQL 5.7+
+- PostgreSQL 15+（需要安装 pgvector 扩展）
 
 ### 1. 数据库配置（PostgreSQL）
 
@@ -74,6 +74,16 @@ JobDataAnalysis/
 - 支持环境变量：`DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD`
 
 数据库表与向量库结构由 Flyway 迁移脚本管理（`backend/src/main/resources/db/migration`）。
+
+Docker 快速启动（PostgreSQL 15 + pgvector）：
+
+```bash
+docker run --name jobdata-pg \
+  -e POSTGRES_PASSWORD=123456ppoo \
+  -e POSTGRES_DB=job_data \
+  -p 5432:5432 \
+  -d pgvector/pgvector:pg15
+```
 
 ### 需要修改的配置（重要）
 
@@ -106,7 +116,7 @@ JobDataAnalysis/
   - `AI_BASE_URL`（默认 `https://dashscope.aliyuncs.com/compatible-mode`）
   - `AI_CHAT_MODEL`（默认 `qwen3.5-omni-plus-2026-03-15`）
   - `AI_EMBEDDING_MODEL`（默认 `text-embedding-v3`）
-  - `AI_EMBEDDING_DIM`（默认 `1024`）
+  - `AI_EMBEDDING_DIM`（默认 `1024`，需与数据库 `vector_store.embedding` 维度一致）
 
 5) 后端触发爬虫的 Python 解释器
 - 若由后端触发爬虫，建议设置环境变量：
@@ -132,7 +142,7 @@ npm install
 npm run dev
 ```
 
-前端服务：`http://localhost:5173`
+前端服务：`http://localhost:3000`
 
 ### 4. 爬虫运行
 

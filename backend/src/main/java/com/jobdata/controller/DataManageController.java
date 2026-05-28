@@ -60,6 +60,15 @@ public class DataManageController {
         }
     }
 
+    @PostMapping("/stop")
+    public Result<Map<String, Object>> stopUpdate() {
+        try {
+            return Result.success(dataManageService.stopUpdate());
+        } catch (Exception e) {
+            return Result.error("停止失败: " + e.getMessage());
+        }
+    }
+
     /**
      * 清空更新日志。
      *

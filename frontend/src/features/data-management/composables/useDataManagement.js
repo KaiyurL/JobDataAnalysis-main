@@ -149,6 +149,7 @@ export function useDataManagement() {
    * - 爬虫处于 running 状态，且后端标记 waitingForLogin（需要人工登录/验证）。
    */
   const canConfirmLogin = computed(() => overview.value?.status === 'running' && overview.value?.waitingForLogin === true)
+  const canStop = computed(() => overview.value?.status === 'running')
 
   /**
    * 根据当前配置估算“预计请求次数”（用于预览展示）。
@@ -181,7 +182,6 @@ export function useDataManagement() {
 
   const reindexing = ref(false)
   const reindexResult = ref(null)
-  const reindexDedup = ref(null)
 
   /**
    * 重建向量索引（供 RAG 检索使用）。
@@ -195,14 +195,10 @@ export function useDataManagement() {
   const handleReindex = async () => {
     reindexing.value = true
     reindexResult.value = null
-    reindexDedup.value = null
     try {
       const data = await ragApi.reindexJobsData({ source: 'all', limit: 0, reset: true })
       reindexResult.value = data.documents || 0
-      reindexDedup.value = data.dedup || null
-      const deleted = data?.dedup?.totalDeleted
-      const suffix = typeof deleted === 'number' ? `；已清洗重复数据 ${deleted} 条` : ''
-      ElMessage.success(`向量索引已重建，共索引 ${data.documents || 0} 个岗位${suffix}`)
+      ElMessage.success(`向量索引已重建，共索引 ${data.documents || 0} 个岗位`)
     } catch (e) {
       console.error(e)
       const msg = e?.response?.data?.message || e?.message || '重建索引失败'
@@ -428,6 +424,26 @@ export function useDataManagement() {
     }
   }
 
+  const stopping = ref(false)
+
+  const stopUpdate = async () => {
+    stopping.value = true
+    try {
+      const payload = await dataManagementApi.stopDataUpdateData()
+      if (payload?.success === false) {
+        ElMessage.warning(payload.message || '当前无法停止')
+        return
+      }
+      ElMessage.success(payload?.message || '已请求停止')
+      await loadData()
+    } catch (e) {
+      console.error('停止失败', e)
+      ElMessage.error('停止失败')
+    } finally {
+      stopping.value = false
+    }
+  }
+
   /**
    * 启动数据更新（爬虫任务）。
    *
@@ -507,11 +523,12 @@ export function useDataManagement() {
     getStatusText,
     configChanged,
     canConfirmLogin,
+    canStop,
     expectedRequests,
     clearLogs,
+    stopping,
     reindexing,
     reindexResult,
-    reindexDedup,
     handleReindex,
     loadData,
     loadConfig,
@@ -524,6 +541,7 @@ export function useDataManagement() {
     addCityCode,
     removeCityCode,
     confirmLogin,
+    stopUpdate,
     startUpdate
   }
 }

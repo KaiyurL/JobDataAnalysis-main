@@ -245,7 +245,6 @@ com/jobdata/
       JobToolResultStore.java       # 暂存岗位卡片（单次请求内）
     rag/
       JobRagIndexer.java            # 将岗位构造成向量文档写入向量库
-      JobDataCleanupService.java    # job_info/job_info_51job 按 job_url 去重（保留最新一条）
     model/
       AgentChatResponse.java        # AI 对话响应
       AgentStreamEvent.java         # SSE 流式事件模型

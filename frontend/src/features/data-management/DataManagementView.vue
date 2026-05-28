@@ -44,15 +44,17 @@
           :updating="updating"
           :button-disabled="buttonDisabled"
           :can-confirm-login="canConfirmLogin"
+          :can-stop="canStop"
           :expected-requests="expectedRequests"
           :config="config"
           :logs="logs"
           :set-log-container="setLogContainer"
           :reindexing="reindexing"
           :reindex-result="reindexResult == null ? undefined : reindexResult"
-          :reindex-dedup="reindexDedup == null ? undefined : reindexDedup"
+          :stopping="stopping"
           :start-update="startUpdate"
           :confirm-login="confirmLogin"
+          :stop-update="stopUpdate"
           :handle-reindex="handleReindex"
           :clear-logs="clearLogs"
         />
@@ -85,11 +87,12 @@ const {
   getStatusText,
   configChanged,
   canConfirmLogin,
+  canStop,
   expectedRequests,
   clearLogs,
+  stopping,
   reindexing,
   reindexResult,
-  reindexDedup,
   handleReindex,
   loadData,
   saveConfig,
@@ -101,6 +104,7 @@ const {
   addCityCode,
   removeCityCode,
   confirmLogin,
+  stopUpdate,
   startUpdate
 } = useDataManagement()
 

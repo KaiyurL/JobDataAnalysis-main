@@ -70,7 +70,7 @@ dist-ssr/
 # Data/Models (ignored)
 crawler/data/
 crawler/output/
-models/
+crawler/tmp/
 notebooks/.ipynb_checkpoints/
 
 # Security
