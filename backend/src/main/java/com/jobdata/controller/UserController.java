@@ -4,11 +4,9 @@ package com.jobdata.controller;
 import com.jobdata.dto.Result;
 import com.jobdata.entity.UserFavoriteJob;
 import com.jobdata.entity.UserJobHistory;
-import com.jobdata.entity.UserMatchHistory;
 import com.jobdata.entity.UserProfile;
 import com.jobdata.service.UserFavoriteJobService;
 import com.jobdata.service.UserJobHistoryService;
-import com.jobdata.service.UserMatchHistoryService;
 import com.jobdata.service.UserProfileService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -32,8 +30,6 @@ public class UserController {
     private UserProfileService userProfileService;
     @Autowired
     private UserFavoriteJobService userFavoriteJobService;
-    @Autowired
-    private UserMatchHistoryService userMatchHistoryService;
     @Autowired
     private UserJobHistoryService userJobHistoryService;
     @Autowired
@@ -245,54 +241,6 @@ public class UserController {
         row.setJobJson(writeJson(job != null ? job : payload.get("jobJson")));
         userJobHistoryService.saveOrUpdate(row);
         return Result.success(row);
-    }
-
-    /**
-     * 获取用户匹配历史记录列表。
-     *
-     * @param authentication 当前认证信息（principal 为用户 ID）
-     * @param size 返回条数（默认 20，最大 100）
-     * @return 匹配历史列表
-     */
-    @GetMapping("/match-history")
-    public Result<List<UserMatchHistory>> listMatchHistory(Authentication authentication, @RequestParam(defaultValue = "20") Integer size) {
-        Long userId = (Long) authentication.getPrincipal();
-        int limit = size == null ? 20 : Math.max(1, Math.min(100, size));
-        List<UserMatchHistory> list = userMatchHistoryService.list(
-                new LambdaQueryWrapper<UserMatchHistory>()
-                        .eq(UserMatchHistory::getUserId, userId)
-                        .orderByDesc(UserMatchHistory::getCreatedAt)
-                        .last("limit " + limit)
-        );
-        return Result.success(list);
-    }
-
-    /**
-     * 获取匹配历史详情（校验记录归属当前用户）。
-     *
-     * @param authentication 当前认证信息（principal 为用户 ID）
-     * @param id 匹配历史记录 ID
-     * @return 匹配详情
-     */
-    @GetMapping("/match-history/{id}")
-    public Result<Map<String, Object>> getMatchHistoryDetail(Authentication authentication, @PathVariable Long id) {
-        Long userId = (Long) authentication.getPrincipal();
-        UserMatchHistory row = userMatchHistoryService.getOne(
-                new LambdaQueryWrapper<UserMatchHistory>()
-                        .eq(UserMatchHistory::getId, id)
-                        .eq(UserMatchHistory::getUserId, userId)
-        );
-        if (row == null) {
-            return Result.fail("记录不存在");
-        }
-        Map<String, Object> out = new HashMap<>();
-        out.put("id", row.getId());
-        out.put("targetRole", row.getTargetRole());
-        out.put("city", row.getCity());
-        out.put("createdAt", row.getCreatedAt());
-        out.put("profile", readJsonAsObject(row.getProfileJson()));
-        out.put("result", readJsonAsObject(row.getResultJson()));
-        return Result.success(out);
     }
 
     /**

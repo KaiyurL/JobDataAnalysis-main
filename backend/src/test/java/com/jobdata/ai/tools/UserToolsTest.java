@@ -6,7 +6,6 @@ import com.jobdata.entity.UserFavoriteJob;
 import com.jobdata.entity.UserProfile;
 import com.jobdata.service.UserFavoriteJobService;
 import com.jobdata.service.UserJobHistoryService;
-import com.jobdata.service.UserMatchHistoryService;
 import com.jobdata.service.UserProfileService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,9 +35,6 @@ class UserToolsTest {
     @Mock
     UserJobHistoryService userJobHistoryService;
 
-    @Mock
-    UserMatchHistoryService userMatchHistoryService;
-
     ObjectMapper objectMapper = new ObjectMapper();
 
     UserTools userTools;
@@ -46,7 +42,7 @@ class UserToolsTest {
     @BeforeEach
     void setUp() {
         UserContextHolder.setUserId(1L);
-        userTools = new UserTools(userProfileService, userFavoriteJobService, userJobHistoryService, userMatchHistoryService, objectMapper);
+        userTools = new UserTools(userProfileService, userFavoriteJobService, userJobHistoryService, objectMapper);
     }
 
     @AfterEach

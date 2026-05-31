@@ -167,14 +167,12 @@ public class AgentChatService {
         sb.append("\n- 用户问“按我的情况/基于我的画像”时：优先使用用户画像（如果画像缺失则调用 user_get_profile），再结合岗位检索给建议。");
         sb.append("\n- 用户问“基于我的收藏/我收藏了哪些”时：先调用 user_list_favorites（如系统未提供收藏摘要）。");
         sb.append("\n- 用户问“我最近看过什么/基于浏览历史推荐”时：先调用 user_list_job_history（如系统未提供浏览摘要）。");
-        sb.append("\n- 用户问“我上次匹配了什么/匹配历史”时：先调用 user_list_match_history（如系统未提供匹配摘要）。");
         sb.append("\n- 仅当用户明确要求“保存/更新画像”时才调用 user_upsert_profile。");
         sb.append("\n\n【可用工具】");
         sb.append("\n- job_search：按条件从数据库检索岗位。");
         sb.append("\n- user_get_profile：读取当前用户画像。");
         sb.append("\n- user_list_favorites：读取收藏。");
         sb.append("\n- user_list_job_history：读取浏览历史。");
-        sb.append("\n- user_list_match_history：读取匹配历史。");
         sb.append("\n- user_upsert_profile：仅当用户明确要求“保存/修改画像”时才可调用。");
 
         if (userId != null) {
@@ -213,12 +211,6 @@ public class AgentChatService {
                     sb.append("\n\n【用户浏览历史（节选）】\n").append(hist);
                 }
             }
-            if (needMatchHistory(query)) {
-                String mh = renderMatchHistoryForPromptSafe(10);
-                if (!mh.isEmpty()) {
-                    sb.append("\n\n【用户匹配历史（节选）】\n").append(mh);
-                }
-            }
         }
 
         List<Map<String, Object>> citations = buildCitations(query, profileMap);
@@ -249,13 +241,6 @@ public class AgentChatService {
      */
     private boolean needJobHistory(String query) {
         return containsAny(query, "浏览", "看过", "最近看", "历史记录");
-    }
-
-    /**
-     * 判断查询是否需要匹配历史信息
-     */
-    private boolean needMatchHistory(String query) {
-        return containsAny(query, "匹配历史", "上次匹配", "之前匹配", "匹配记录");
     }
 
     /**
@@ -296,37 +281,6 @@ public class AgentChatService {
         try {
             List<Map<String, Object>> list = userTools.userListJobHistory(limit);
             return renderJobListForPrompt(list, limit);
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
-    /**
-     * 安全地获取匹配历史并格式化
-     */
-    private String renderMatchHistoryForPromptSafe(int limit) {
-        try {
-            List<Map<String, Object>> list = userTools.userListMatchHistory(limit);
-            if (list == null || list.isEmpty()) {
-                return "";
-            }
-            StringBuilder sb = new StringBuilder();
-            int shown = Math.min(limit, list.size());
-            for (int i = 0; i < shown; i++) {
-                Map<String, Object> m = list.get(i);
-                String targetRole = asString(m == null ? null : m.get("targetRole"), "");
-                String city = asString(m == null ? null : m.get("city"), "");
-                String createdAt = String.valueOf(m == null ? "" : m.getOrDefault("createdAt", ""));
-                if (targetRole.isEmpty() && city.isEmpty()) {
-                    continue;
-                }
-                sb.append(i + 1).append(". ")
-                        .append(targetRole.isEmpty() ? "（未填目标岗位）" : targetRole)
-                        .append(city.isEmpty() ? "" : (" · " + city))
-                        .append(createdAt.isBlank() ? "" : (" · " + createdAt))
-                        .append("\n");
-            }
-            return sb.toString().trim();
         } catch (Exception e) {
             return "";
         }

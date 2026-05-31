@@ -99,7 +99,6 @@ def main():
         ("user_profile", "user_profile"),
         ("user_favorite_job", "user_favorite_job"),
         ("user_job_history", "user_job_history"),
-        ("user_match_history", "user_match_history"),
     ]
 
     mysql_conn = pymysql.connect(**mysql_cfg)

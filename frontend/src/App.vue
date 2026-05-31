@@ -143,71 +143,7 @@
             </el-card>
           </div>
         </el-tab-pane>
-        <el-tab-pane name="match" label="匹配历史">
-          <div v-if="matchHistoryLoading" style="padding: 12px 0">
-            <el-skeleton :rows="6" animated />
-          </div>
-          <el-empty v-else-if="!matchHistory.length" description="暂无匹配历史" />
-          <div v-else>
-            <el-table :data="matchHistory" style="width: 100%">
-              <el-table-column prop="targetRole" label="目标岗位" min-width="160" />
-              <el-table-column prop="city" label="城市" min-width="120" />
-              <el-table-column label="时间" min-width="180">
-                <template #default="{ row }">
-                  {{ formatTimeDisplay(row.createdAt) }}
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="120">
-                <template #default="{ row }">
-                  <el-button size="small" type="primary" plain @click="openMatchHistoryDetail(row.id)">查看</el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
-        </el-tab-pane>
       </el-tabs>
-    </el-dialog>
-
-    <el-dialog v-model="matchHistoryDetailVisible" width="920px" title="匹配历史详情" :append-to-body="true">
-      <div v-if="matchHistoryDetailLoading" style="padding: 12px 0">
-        <el-skeleton :rows="6" animated />
-      </div>
-      <el-empty v-else-if="!matchHistoryDetailCards.length" description="无可展示的匹配结果" />
-      <div v-else class="jd-jobs-grid">
-        <el-card v-for="c in matchHistoryDetailCards" :key="c.key" shadow="hover" class="jd-job-card">
-          <div class="jd-job-card__head">
-            <div class="jd-job-card__title">{{ c.job.jobName }}</div>
-            <div v-if="c.job.salaryMin != null && c.job.salaryMax != null" class="jd-job-card__salary">
-              {{ c.job.salaryMin }}K-{{ c.job.salaryMax }}K
-            </div>
-            <div v-else class="jd-job-card__salary is-muted">面议</div>
-          </div>
-          <div class="jd-job-card__sub">
-            {{ c.job.companyName }}<span v-if="c.job.city"> · {{ c.job.city }}</span>
-          </div>
-          <div class="jd-job-card__tags">
-            <el-tag size="small" type="info" effect="plain">{{ c.job.experience || '经验不限' }}</el-tag>
-            <el-tag size="small" type="info" effect="plain">{{ c.job.education || '学历不限' }}</el-tag>
-            <el-tag size="small" :type="sourceTagType(c.sourceTable)" effect="plain">{{ sourceLabel(c.sourceTable) }}</el-tag>
-          </div>
-          <div v-if="c.matchScore != null" class="jd-job-card__meta">匹配度：{{ Math.round((Number(c.matchScore) || 0) * 10) / 10 }}%</div>
-          <div class="jd-job-card__actions">
-            <el-button
-              size="small"
-              :type="isFavorite(c.sourceTable, c.job.jobUrl) ? 'warning' : 'default'"
-              plain
-              :loading="favoriteBusyKey === favoriteKeyOfCard(c)"
-              @click.stop="toggleFavorite(c)"
-            >
-              <el-icon><StarFilled v-if="isFavorite(c.sourceTable, c.job.jobUrl)" /><Star v-else /></el-icon>
-              {{ isFavorite(c.sourceTable, c.job.jobUrl) ? '已收藏' : '收藏' }}
-            </el-button>
-            <el-button size="small" type="primary" plain @click.stop="openJobUrl(c.job.jobUrl)">
-              打开 <el-icon><TopRight /></el-icon>
-            </el-button>
-          </div>
-        </el-card>
-      </div>
     </el-dialog>
   </div>
 </template>
@@ -277,12 +213,6 @@ const {
   historyTab,
   jobHistoryLoading,
   jobHistoryList,
-  matchHistoryLoading,
-  matchHistory,
-  matchHistoryDetailVisible,
-  matchHistoryDetailLoading,
-  matchHistoryDetailCards,
-  openMatchHistoryDetail,
   openFavorites,
   openHistory,
   toggleFavorite,

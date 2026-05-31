@@ -26,11 +26,6 @@ export function useUserDataStore(deps) {
   const historyTab = ref('view')
   const jobHistoryLoading = ref(false)
   const jobHistoryRaw = ref([])
-  const matchHistoryLoading = ref(false)
-  const matchHistory = ref([])
-  const matchHistoryDetailVisible = ref(false)
-  const matchHistoryDetailLoading = ref(false)
-  const matchHistoryDetailCards = ref([])
 
   /**
    * 生成收藏/历史的稳定 key。
@@ -250,56 +245,6 @@ export function useUserDataStore(deps) {
     return out
   })
 
-  const refreshMatchHistory = async (silent) => {
-    matchHistoryLoading.value = true
-    try {
-      matchHistory.value = await userApi.listMatchHistoryData({ size: 50 })
-    } catch (e) {
-      if (!silent) ElMessage.error(String(e?.message || '加载匹配历史失败'))
-    } finally {
-      matchHistoryLoading.value = false
-    }
-  }
-
-  /**
-   * 将匹配结果列表裁剪为展示卡片。
-   *
-   * @param {Array<any>} list 后端返回的候选列表
-   * @param {number} [limit=12] 最多展示数量
-   * @returns {Array<{ key: string, job: any, sourceTable: string, matchScore?: number }>}
-   */
-  const buildCandidateCards = (list, limit = 12) => {
-    const top = (list || []).slice(0, limit)
-    const out = []
-    for (let i = 0; i < top.length; i++) {
-      const m = top[i]
-      const job = m?.job || {}
-      out.push({
-        key: `${m?.sourceTable || ''}::${job?.jobUrl || job?.id || ''}::hist::${i}`,
-        job,
-        sourceTable: m?.sourceTable || '',
-        matchScore: m?.matchScore
-      })
-    }
-    return out
-  }
-
-  const openMatchHistoryDetail = async (id) => {
-    matchHistoryDetailVisible.value = true
-    matchHistoryDetailLoading.value = true
-    matchHistoryDetailCards.value = []
-    try {
-      const data = await userApi.getMatchHistoryDetailData(id)
-      const result = data?.result
-      const list = Array.isArray(result) ? result : []
-      matchHistoryDetailCards.value = buildCandidateCards(list, 12)
-    } catch (e) {
-      ElMessage.error(String(e?.message || '加载详情失败'))
-    } finally {
-      matchHistoryDetailLoading.value = false
-    }
-  }
-
   /**
    * 切换收藏状态（收藏/取消收藏）。
    *
@@ -360,7 +305,7 @@ export function useUserDataStore(deps) {
   const openHistory = async () => {
     historyVisible.value = true
     historyTab.value = 'view'
-    await Promise.all([refreshJobHistory(true), refreshMatchHistory(true)])
+    await refreshJobHistory(true)
   }
 
   let disposed = false
@@ -412,12 +357,6 @@ export function useUserDataStore(deps) {
     historyTab,
     jobHistoryLoading,
     jobHistoryList,
-    matchHistoryLoading,
-    matchHistory,
-    matchHistoryDetailVisible,
-    matchHistoryDetailLoading,
-    matchHistoryDetailCards,
-    openMatchHistoryDetail,
     openFavorites,
     openHistory,
     toggleFavorite,

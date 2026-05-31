@@ -12,6 +12,7 @@ BOSS 直聘爬虫（页面解析版）
 
 import time
 import random
+import re
 from urllib.parse import quote
 
 import psycopg2
@@ -26,6 +27,10 @@ from .spider_common import (
     extract_welfare_from_desc,
     insert_job_boss,
     random_delay,
+)
+
+_BAD_WELFARE_TOKEN = re.compile(
+    r"(待优化|5-10年|本科|高中|学历不限|硕士|城市招聘|热门职位|推荐公司|热门企业|在线|专科|大专|中专|\d+年以上|\d+-\d+年)"
 )
 
 
@@ -197,6 +202,46 @@ def boss_parse_detail_in_new_tab(page, job_url):
                     break
             except Exception:
                 continue
+
+        personal_values = set()
+        for sel in (
+            "css:span.label-text",
+            'xpath://span[contains(@class, "label-text")]',
+        ):
+            try:
+                ele = tab.ele(sel, timeout=0.2)
+                t = str(ele.text or "").strip() if ele else ""
+                if t:
+                    personal_values.add(t)
+                    break
+            except Exception:
+                continue
+
+        for sel in (
+            "css:a.text-desc.text-city",
+            'xpath://a[contains(@class, "text-city")]',
+        ):
+            try:
+                ele = tab.ele(sel, timeout=0.2)
+                t = str(ele.text or "").strip() if ele else ""
+                if t:
+                    personal_values.add(t)
+                    break
+            except Exception:
+                continue
+
+        for sel in (
+            "css:span.text-desc.text-experiece",
+            'xpath://span[contains(@class, "text-experiece")]',
+        ):
+            try:
+                ele = tab.ele(sel, timeout=0.2)
+                t = str(ele.text or "").strip() if ele else ""
+                if t:
+                    personal_values.add(t)
+                    break
+            except Exception:
+                continue
         company_size = None
         company_industry = None
         company_welfare = None
@@ -264,7 +309,6 @@ def boss_parse_detail_in_new_tab(page, job_url):
 
         welfare_tags = []
         for sel in (
-            'xpath://*[(self::div or self::section) and (contains(., "职位福利") or contains(., "福利"))]//span[contains(@class, "tag") or contains(@class, "item") or contains(@class, "text")]',
             'xpath://div[contains(@class, "job-tags")]//span',
             'xpath://div[contains(@class, "job-welfare")]//span',
         ):
@@ -277,13 +321,31 @@ def boss_parse_detail_in_new_tab(page, job_url):
                     t = str(e.text or "").strip()
                 except Exception:
                     t = ""
+                if personal_values and t in personal_values:
+                    continue
+                if t and _BAD_WELFARE_TOKEN.search(t):
+                    continue
                 if t and t not in welfare_tags:
                     welfare_tags.append(t)
 
         if welfare_tags:
             company_welfare = ",".join(welfare_tags[:30])
         else:
-            company_welfare = extract_welfare_from_desc(desc)
+            raw = extract_welfare_from_desc(desc)
+            if raw:
+                norm = re.sub(r"\s+", " ", str(raw).replace("\r", "\n").replace("\t", " ")).strip()
+                tokens = [x.strip() for x in re.split(r"[，,、;；|/]+|\s{2,}", norm) if x.strip()]
+                keep = []
+                for x in tokens:
+                    if personal_values and x in personal_values:
+                        continue
+                    if _BAD_WELFARE_TOKEN.search(x):
+                        continue
+                    if x not in keep:
+                        keep.append(x)
+                company_welfare = "；".join(keep[:30]) if keep else None
+            else:
+                company_welfare = None
 
         return salary, desc, company_size, company_industry, company_welfare, job_keyword_tags
     finally:

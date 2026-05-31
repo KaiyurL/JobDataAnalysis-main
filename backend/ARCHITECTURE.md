@@ -18,7 +18,7 @@
 
 - 认证与用户：
   - [AuthController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/controller/AuthController.java)：登录/注册，签发 JWT
-  - [UserController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/controller/UserController.java)：用户画像、收藏、浏览历史、匹配历史
+  - [UserController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/controller/UserController.java)：用户画像、收藏、浏览历史
 - 职位与统计：
   - [JobInfoController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/controller/JobInfoController.java)：BOSS 职位分页与统计
   - [JobInfo51JobController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/controller/JobInfo51JobController.java)：51Job 职位分页与统计
@@ -40,7 +40,6 @@
   - [UserProfileService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/UserProfileService.java)
   - [UserFavoriteJobService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/UserFavoriteJobService.java)
   - [UserJobHistoryService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/UserJobHistoryService.java)
-  - [UserMatchHistoryService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/UserMatchHistoryService.java)
   - [ConfigService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/ConfigService.java)
   - [DataManageService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/DataManageService.java)
   - [PipelineService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/PipelineService.java)
@@ -66,7 +65,6 @@
   - [UserProfileMapper.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/mapper/UserProfileMapper.java)
   - [UserFavoriteJobMapper.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/mapper/UserFavoriteJobMapper.java)
   - [UserJobHistoryMapper.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/mapper/UserJobHistoryMapper.java)
-  - [UserMatchHistoryMapper.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/mapper/UserMatchHistoryMapper.java)
 
 ### entity（数据库实体）
 
@@ -80,7 +78,6 @@
   - [UserProfile.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/entity/UserProfile.java)（user_profile）
   - [UserFavoriteJob.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/entity/UserFavoriteJob.java)（user_favorite_job）
   - [UserJobHistory.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/entity/UserJobHistory.java)（user_job_history）
-  - [UserMatchHistory.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/entity/UserMatchHistory.java)（user_match_history）
 
 ### dto（接口数据模型）
 
@@ -177,7 +174,7 @@ com/jobdata/
 
   controller/                       # HTTP 接口层：参数接收/鉴权上下文取 userId/返回 Result
     AuthController.java             # 登录/注册，签发 JWT
-    UserController.java             # 用户画像、收藏、浏览历史、匹配历史
+    UserController.java             # 用户画像、收藏、浏览历史
     JobInfoController.java          # BOSS 职位分页与统计
     JobInfo51JobController.java     # 51Job 职位分页与统计
     ResumeController.java           # 简历上传解析、结构化抽取
@@ -208,7 +205,6 @@ com/jobdata/
     UserProfile.java                # user_profile
     UserFavoriteJob.java            # user_favorite_job
     UserJobHistory.java             # user_job_history
-    UserMatchHistory.java           # user_match_history
 
   dto/                              # 接口数据模型（请求/响应/统计 DTO）
     Result.java                     # 统一返回结构（code/message/data）

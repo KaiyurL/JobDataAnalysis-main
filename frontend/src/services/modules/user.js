@@ -91,38 +91,6 @@ export const removeFavorite = (params) => http.delete('/user/favorites', { param
 export const removeFavoriteData = (params) => requestApi(removeFavorite(params), '取消收藏失败')
 
 /**
- * 获取匹配历史列表（可分页/可筛选，参数由后端定义）。
- *
- * @param {Record<string, any>} [params={}] 查询参数
- * @returns {import('axios').AxiosPromise<any>} axios 响应 Promise
- */
-export const listMatchHistory = (params = {}) => http.get('/user/match-history', { params })
-
-/**
- * 获取匹配历史列表（已解包）。
- *
- * @param {Record<string, any>} [params={}]
- * @returns {Promise<Array<any>>}
- */
-export const listMatchHistoryData = (params = {}) => requestApi(listMatchHistory(params), '加载匹配历史失败')
-
-/**
- * 获取匹配历史详情。
- *
- * @param {string|number} id 历史记录 ID
- * @returns {import('axios').AxiosPromise<any>} axios 响应 Promise
- */
-export const getMatchHistoryDetail = (id) => http.get(`/user/match-history/${id}`)
-
-/**
- * 获取匹配历史详情（已解包）。
- *
- * @param {string|number} id
- * @returns {Promise<any>}
- */
-export const getMatchHistoryDetailData = (id) => requestApi(getMatchHistoryDetail(id), '加载详情失败')
-
-/**
  * 获取浏览历史列表（可分页/可筛选）。
  *
  * @param {Record<string, any>} [params={}] 查询参数

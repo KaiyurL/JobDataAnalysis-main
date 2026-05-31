@@ -6,11 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobdata.ai.context.UserContextHolder;
 import com.jobdata.entity.UserFavoriteJob;
 import com.jobdata.entity.UserJobHistory;
-import com.jobdata.entity.UserMatchHistory;
 import com.jobdata.entity.UserProfile;
 import com.jobdata.service.UserFavoriteJobService;
 import com.jobdata.service.UserJobHistoryService;
-import com.jobdata.service.UserMatchHistoryService;
 import com.jobdata.service.UserProfileService;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -31,20 +29,17 @@ public class UserTools {
     private final UserProfileService userProfileService;
     private final UserFavoriteJobService userFavoriteJobService;
     private final UserJobHistoryService userJobHistoryService;
-    private final UserMatchHistoryService userMatchHistoryService;
     private final ObjectMapper objectMapper;
 
     public UserTools(
             UserProfileService userProfileService,
             UserFavoriteJobService userFavoriteJobService,
             UserJobHistoryService userJobHistoryService,
-            UserMatchHistoryService userMatchHistoryService,
             ObjectMapper objectMapper
     ) {
         this.userProfileService = userProfileService;
         this.userFavoriteJobService = userFavoriteJobService;
         this.userJobHistoryService = userJobHistoryService;
-        this.userMatchHistoryService = userMatchHistoryService;
         this.objectMapper = objectMapper;
     }
 
@@ -155,34 +150,6 @@ public class UserTools {
     }
 
     /**
-     * 列出当前用户的匹配历史记录
-     *
-     * @param limit 返回数量上限，默认 20
-     * @return 匹配历史列表
-     */
-    @Tool(name = "user_list_match_history", description = "列出当前用户的匹配历史记录（不包含大结果详情）。用户问我之前匹配了什么/上次匹配结果时使用。")
-    public List<Map<String, Object>> userListMatchHistory(@ToolParam(description = "返回数量上限，默认 20", required = false) Integer limit) {
-        Long userId = requireUserId();
-        int lim = limit == null ? 20 : Math.max(1, Math.min(100, limit));
-        List<UserMatchHistory> list = userMatchHistoryService.list(
-                new LambdaQueryWrapper<UserMatchHistory>()
-                        .eq(UserMatchHistory::getUserId, userId)
-                        .orderByDesc(UserMatchHistory::getCreatedAt)
-                        .last("limit " + lim)
-        );
-        List<Map<String, Object>> out = new ArrayList<>();
-        for (UserMatchHistory m : list) {
-            Map<String, Object> x = new HashMap<>();
-            x.put("id", m.getId());
-            x.put("targetRole", m.getTargetRole());
-            x.put("city", m.getCity());
-            x.put("createdAt", m.getCreatedAt());
-            out.add(x);
-        }
-        return out;
-    }
-
-    /**
      * 获取当前用户ID，未登录时抛出异常
      */
     private Long requireUserId() {
@@ -277,4 +244,3 @@ public class UserTools {
         }
     }
 }
-

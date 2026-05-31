@@ -67,7 +67,6 @@ class ApiFullSmokeTest {
         JobInfo51JobService jobInfo51JobService = mock(JobInfo51JobService.class);
         UserProfileService userProfileService = mock(UserProfileService.class);
         UserFavoriteJobService userFavoriteJobService = mock(UserFavoriteJobService.class);
-        UserMatchHistoryService userMatchHistoryService = mock(UserMatchHistoryService.class);
         UserJobHistoryService userJobHistoryService = mock(UserJobHistoryService.class);
         UserService userService = mock(UserService.class);
         ResumeService resumeService = mock(ResumeService.class);
@@ -90,7 +89,6 @@ class ApiFullSmokeTest {
         UserController userController = new UserController();
         setField(userController, "userProfileService", userProfileService);
         setField(userController, "userFavoriteJobService", userFavoriteJobService);
-        setField(userController, "userMatchHistoryService", userMatchHistoryService);
         setField(userController, "userJobHistoryService", userJobHistoryService);
         setField(userController, "objectMapper", objectMapper);
 
