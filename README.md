@@ -1,11 +1,5 @@
 # 招聘数据智能分析与可视化平台
 
-![Java](https://img.shields.io/badge/Java-21-orange.svg)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2-green.svg)
-![Vue](https://img.shields.io/badge/Vue-3-blue.svg)
-![Python](https://img.shields.io/badge/Python-3.x-yellow.svg)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-blue.svg)
-
 ## 项目简介
 
 本项目是一个招聘数据全链路分析平台，从数据采集、清洗、存储到可视化分析和智能推荐，实现求职市场的多维度洞察。
@@ -38,15 +32,32 @@
 - 统一推荐源：语义参考（向量检索）+ 数据库候选检索 + 大模型精排/总结输出
 
 ### ️ 数据采集
-- 支持 BOSS直聘 / 前程无忧 两个平台爬取，前程无忧数据独立入表 `job_info_51job`
+- 支持 BOSS直聘 / 前程无忧 两个平台爬取，数据独立入表 `job_info`，`job_info_51job`
 - 爬取配置可在前端「数据管理」页面编辑并保存
 - 后端触发爬虫并在前端显示运行日志/开始结束时间
 
 ### 🧾 数据字段
 核心字段包括：
-- 工作介绍 `job_desc`
+### 🧾 数据字段
+核心字段包括：
+- 职位名称 `job_name`
+- 公司名称 `company_name`
+- 城市     `city`
+- 招聘链接 `job_url`
+- 最低薪资 `salary_min`
+- 最高薪资 `salary_max`
+- 平均薪资 `salary_avg`
+- 工作经验 `experience`
+- 学历要求 `education`
+- 工作描述 `job_desc`
+- 职位关键词 `job_keywords`
+- 公司规模 `company_size`
+- 公司行业 `company_industry`
 - 公司福利 `company_welfare`
-- 招聘路径 `job_url`
+- 发布日期 `publish_date`
+- 创建时间 `created_at`
+
+// ... existing code ...
 
 ## 项目结构
 
@@ -54,7 +65,7 @@
 JobDataAnalysis/
 ├── backend/                  # Spring Boot 后端
 ├── frontend/                 # Vue 3 前端
-├── crawler/                  # Python 爬虫（spider.py）
+├── crawler/                  # Python 爬虫（spider.py）和数据处理
 └── README.md                 # 项目说明
 ```
 
@@ -102,7 +113,7 @@ docker run --name jobdata-pg \
 - 常用可调整项：
   - `platform`: `boss` / `51job` / `both`
   - `keywords` / `cities`
-  - `pages_per_keyword`（Boss 每关键词页数）
+  - `pages_per_keyword`（Boss 每关键词页的滚轮数）
   - `pages_per_city_51job`（前程无忧每城市页数）
   - `city_codes_51job`（前程无忧城市编码映射）
   - `delay_min` / `delay_max`（请求间隔，建议保守一点避免风控）
@@ -172,52 +183,11 @@ python spider.py --platform both
 - 若由后端触发爬虫，建议设置环境变量 `JOBDATA_PYTHON` 指向已安装依赖的 python.exe
 
 ## 项目截图
-见 images 文件夹
+![alt text](<images/屏幕截图 2026-05-31 190311.png>)
+![alt text](<images/屏幕截图 2026-05-31 190324.png>) 
+![alt text](<images/屏幕截图 2026-05-31 190333.png>) 
+![alt text](<images/屏幕截图 2026-05-31 190346.png>)
 
-## API 接口示例
 
-### 登录接口
 
-```bash
-POST /api/auth/login
-{
-  "username": "admin",
-  "password": "admin123"
-}
-```
 
-### 获取统计概览
-
-```bash
-GET /api/jobs/stats/overview
-GET /api/jobs51/stats/overview
-```
-
-### 岗位分页
-
-```bash
-GET /api/jobs/page
-GET /api/jobs51/page
-```
-
-### 薪资预测
-
-```bash
-POST /api/jobs/predict/salary
-{
-  "education": "本科",
-  "experience": "3-5年",
-  "city": "北京",
-  "keyword": "Java"
-}
-```
-
-## 开源协议
-MIT License
-
-## 贡献
-欢迎提交 Issue 和 Pull Request！若需扩展数据源或优化算法，请参考开发文档：
-https://www.yuque.com/xiaopacai-0kvnt/onwagq/vkaze4lkw4y7bhd9?singleDoc# 《招聘数据可视化分析平台 - 项目部署与功能说明文档》
-
-## 联系方式
-- GitHub: [SZBDAS](https://github.com/SZBDAS)
