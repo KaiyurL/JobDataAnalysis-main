@@ -109,14 +109,20 @@ docker run --name jobdata-pg \
   - `browser`: `auto` / `edge` / `chrome`（选择启动浏览器）
   - 浏览器路径（Windows）：在 `crawler/runtime_config.json` 的 `browser.edge_candidates` / `browser.chrome_candidates` 中配置
 
-4) AI 智能求职助手（阿里云百炼 OpenAI 兼容模式）
+4) AI 智能求职助手（支持 OpenAI 兼容模式 + Ollama Embedding 可切换）
 - 必需环境变量：
   - `AI_DASHSCOPE_API_KEY`
 - 可选环境变量：
   - `AI_BASE_URL`（默认 `https://dashscope.aliyuncs.com/compatible-mode`）
-  - `AI_CHAT_MODEL`（默认 `qwen3.5-omni-plus-2026-03-15`）
-  - `AI_EMBEDDING_MODEL`（默认 `text-embedding-v3`）
-  - `AI_EMBEDDING_DIM`（默认 `1024`，需与数据库 `vector_store.embedding` 维度一致）
+  - `AI_OLLAMA_BASE_URL`（默认 `http://localhost:11434`）
+
+Embedding / 模型如何切换：
+- 直接修改后端配置文件：`backend/src/main/resources/application.yml`
+  - `spring.ai.model.chat` 固定为 `openai`（用于 DashScope compatible-mode 聊天）
+  - `spring.ai.model.embedding` 在 `ollama` / `openai` 间切换（RAG 向量化用哪个 embedding）
+  - `spring.ai.openai.embedding.options.model`（例如 `text-embedding-v3`）
+  - `spring.ai.ollama.embedding.options.model`（例如 `qwen3-embedding:4b`）
+  - `spring.ai.vectorstore.pgvector.dimensions`（例如 `1024`，需与 embedding 输出维度一致）
 
 5) 后端触发爬虫的 Python 解释器
 - 若由后端触发爬虫，建议设置环境变量：

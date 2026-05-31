@@ -13,7 +13,7 @@ import http, { requestApi } from '../http.js'
  * @param {Record<string, any>} [params={}] 查询参数（如 source/limit/reset 等，由后端约定）
  * @returns {import('axios').AxiosPromise<any>} axios 响应 Promise（可能耗时较长）
  */
-export const reindexJobs = (params = {}) => http.post('/rag/reindex/jobs', null, { params, timeout: 120000 })
+export const reindexJobs = (params = {}) => http.post('/rag/reindex/jobs', null, { params, timeout: 15000 })
 
 /**
  * 重建岗位索引（已解包）。
@@ -22,3 +22,11 @@ export const reindexJobs = (params = {}) => http.post('/rag/reindex/jobs', null,
  * @returns {Promise<any>}
  */
 export const reindexJobsData = (params = {}) => requestApi(reindexJobs(params), '重建失败')
+
+export const reindexJobsAsync = (params = {}) => http.post('/rag/reindex/jobs/async', null, { params, timeout: 15000 })
+
+export const reindexJobsAsyncData = (params = {}) => requestApi(reindexJobsAsync(params), '重建失败')
+
+export const reindexJobsStatus = (params = {}) => http.get('/rag/reindex/jobs/status', { params, timeout: 15000 })
+
+export const reindexJobsStatusData = (params = {}) => requestApi(reindexJobsStatus(params), '查询失败')

@@ -6,9 +6,11 @@ import com.jobdata.ai.controller.RagAdminController;
 import com.jobdata.ai.model.AgentChatResponse;
 import com.jobdata.ai.model.AgentStreamEvent;
 import com.jobdata.ai.rag.JobRagIndexer;
+import com.jobdata.ai.rag.RagReindexJobManager;
 import com.jobdata.ai.service.AgentChatService;
 import com.jobdata.controller.*;
 import com.jobdata.dto.AiChatRequest;
+import com.jobdata.entity.User;
 import com.jobdata.entity.User;
 import com.jobdata.service.*;
 import com.jobdata.util.JwtUtil;
@@ -74,10 +76,11 @@ class ApiFullSmokeTest {
         ConfigService configService = mock(ConfigService.class);
         AgentChatService agentChatService = mock(AgentChatService.class);
         JobRagIndexer jobRagIndexer = mock(JobRagIndexer.class);
+        RagReindexJobManager ragReindexJobManager = mock(RagReindexJobManager.class);
         JwtUtil jwtUtil = mock(JwtUtil.class);
         PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
 
-        stubServices(resumeService, pipelineService, dataManageService, configService, jobRagIndexer, agentChatService, userService, jwtUtil, passwordEncoder);
+        stubServices(resumeService, pipelineService, dataManageService, configService, jobRagIndexer, ragReindexJobManager, agentChatService, userService, jwtUtil, passwordEncoder);
 
         AuthController authController = new AuthController();
         setField(authController, "userService", userService);
@@ -110,7 +113,7 @@ class ApiFullSmokeTest {
         setField(configController, "configService", configService);
 
         AgentController agentController = new AgentController(agentChatService);
-        RagAdminController ragAdminController = new RagAdminController(jobRagIndexer);
+        RagAdminController ragAdminController = new RagAdminController(jobRagIndexer, ragReindexJobManager);
 
         MockMvc mockMvc = MockMvcBuilders
                 .standaloneSetup(
@@ -198,6 +201,7 @@ class ApiFullSmokeTest {
             DataManageService dataManageService,
             ConfigService configService,
             JobRagIndexer jobRagIndexer,
+            RagReindexJobManager ragReindexJobManager,
             AgentChatService agentChatService,
             UserService userService,
             JwtUtil jwtUtil,
@@ -217,12 +221,15 @@ class ApiFullSmokeTest {
         when(dataManageService.getDataOverview()).thenReturn(Map.of("ok", true));
         when(dataManageService.startUpdate()).thenReturn(Map.of("ok", true));
         when(dataManageService.confirmLogin()).thenReturn(Map.of("ok", true));
+        when(dataManageService.stopUpdate()).thenReturn(Map.of("ok", true));
         when(dataManageService.clearLogs()).thenReturn(Map.of("ok", true));
 
         when(configService.getConfig()).thenReturn(Map.of("ok", true));
         when(configService.updateConfig(ArgumentMatchers.anyMap())).thenReturn(Map.of("ok", true));
 
         when(jobRagIndexer.reindexJobs(anyString(), anyInt(), anyBoolean())).thenReturn(Map.of("ok", true, "indexed", 0));
+        when(ragReindexJobManager.start(anyString(), anyInt(), any())).thenReturn(Map.of("jobId", "1", "status", "running"));
+        when(ragReindexJobManager.status(any())).thenReturn(Map.of("jobId", "1", "status", "done", "result", Map.of("documents", 0)));
 
         AgentChatResponse chatResp = new AgentChatResponse();
         chatResp.setReply("ok");

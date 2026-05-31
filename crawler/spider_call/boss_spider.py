@@ -23,6 +23,7 @@ from .spider_common import (
     parse_city,
     parse_education,
     extract_keywords,
+    extract_welfare_from_desc,
     insert_job_boss,
     random_delay,
 )
@@ -154,7 +155,8 @@ def boss_parse_detail_in_new_tab(page, job_url):
     """
     打开岗位详情页提取薪资与职位描述。
 
-    返回 (salary_text, job_desc_text)，失败返回 (None, None)。
+    返回 (salary_text, job_desc_text, company_size, company_industry, company_welfare, job_keyword_tags)。
+    失败返回 (None, None, None, None, None, None)。
     """
     try:
         tab = page.new_tab(job_url, background=False)
@@ -163,7 +165,7 @@ def boss_parse_detail_in_new_tab(page, job_url):
             page.get(job_url)
             tab = page
         except Exception:
-            return None, None
+            return None, None, None, None, None, None
 
     try:
         time.sleep(2)
@@ -195,7 +197,95 @@ def boss_parse_detail_in_new_tab(page, job_url):
                     break
             except Exception:
                 continue
-        return salary, desc
+        company_size = None
+        company_industry = None
+        company_welfare = None
+        job_keyword_tags = None
+
+        kw_items = []
+        for sel in (
+            'xpath://ul[contains(@class, "job-keyword-list")]/li',
+            "css:ul.job-keyword-list > li",
+        ):
+            try:
+                eles = tab.eles(sel, timeout=1)
+            except Exception:
+                eles = []
+            for e in eles or []:
+                try:
+                    t = str(e.text or "").replace("\n", "").strip()
+                except Exception:
+                    t = ""
+                if not t:
+                    continue
+                t = t.replace("BOSS直聘", "").strip()
+                if not t:
+                    continue
+                if t not in kw_items:
+                    kw_items.append(t)
+        if kw_items:
+            job_keyword_tags = kw_items
+
+        tags = []
+        for sel in (
+            'xpath://div[contains(@class, "job-company")]//*[self::span or self::a][contains(@class, "company") or contains(@class, "text") or contains(@class, "tag") or contains(@class, "info")]',
+            'xpath://div[contains(@class, "company-info")]//*[self::span or self::a or self::p]',
+            'xpath://div[contains(@class, "sider-company")]//*[self::span or self::a or self::p]',
+        ):
+            try:
+                eles = tab.eles(sel, timeout=1)
+            except Exception:
+                eles = []
+            for e in eles or []:
+                try:
+                    t = str(e.text or "").strip()
+                except Exception:
+                    t = ""
+                if t and t not in tags:
+                    tags.append(t)
+
+        if tags:
+            for t in tags:
+                if "人" in t and (t.endswith("人") or t.endswith("人以上") or t.endswith("以上")):
+                    company_size = company_size or t
+
+            for t in tags:
+                if not t:
+                    continue
+                if company_size and t == company_size:
+                    continue
+                if "融资" in t or "上市" in t or "未融资" in t:
+                    continue
+                if "人" in t:
+                    continue
+                if len(t) > 20:
+                    continue
+                company_industry = company_industry or t
+
+        welfare_tags = []
+        for sel in (
+            'xpath://*[(self::div or self::section) and (contains(., "职位福利") or contains(., "福利"))]//span[contains(@class, "tag") or contains(@class, "item") or contains(@class, "text")]',
+            'xpath://div[contains(@class, "job-tags")]//span',
+            'xpath://div[contains(@class, "job-welfare")]//span',
+        ):
+            try:
+                eles = tab.eles(sel, timeout=1)
+            except Exception:
+                eles = []
+            for e in eles or []:
+                try:
+                    t = str(e.text or "").strip()
+                except Exception:
+                    t = ""
+                if t and t not in welfare_tags:
+                    welfare_tags.append(t)
+
+        if welfare_tags:
+            company_welfare = ",".join(welfare_tags[:30])
+        else:
+            company_welfare = extract_welfare_from_desc(desc)
+
+        return salary, desc, company_size, company_industry, company_welfare, job_keyword_tags
     finally:
         if tab is not page:
             try:
@@ -263,13 +353,23 @@ def run_boss(page, keywords, cities, max_scrolls, delay_min, delay_max):
                                 print(f"跳过重复简历: {prefix}")
                                 continue
 
-                        salary_text, detail_desc = boss_parse_detail_in_new_tab(page, job_url)
+                        (
+                            salary_text,
+                            detail_desc,
+                            company_size,
+                            company_industry,
+                            company_welfare,
+                            job_keyword_tags,
+                        ) = boss_parse_detail_in_new_tab(page, job_url)
                         job_desc = detail_desc or job_name
 
                         salary_min, salary_max = parse_salary(salary_text or "")
                         clean_city = parse_city(location)
                         clean_education = parse_education(education)
-                        job_keywords = extract_keywords(job_desc)
+                        if job_keyword_tags:
+                            job_keywords = ",".join([str(x).strip() for x in job_keyword_tags if str(x).strip()][:30])
+                        else:
+                            job_keywords = None
 
                         job_data = {
                             "job_name": job_name,
@@ -282,9 +382,9 @@ def run_boss(page, keywords, cities, max_scrolls, delay_min, delay_max):
                             "education": clean_education,
                             "job_desc": job_desc,
                             "job_keywords": job_keywords,
-                            "company_size": None,
-                            "company_industry": None,
-                            "company_welfare": None,
+                            "company_size": company_size,
+                            "company_industry": company_industry,
+                            "company_welfare": company_welfare,
                         }
 
                         if job_name and company_name:

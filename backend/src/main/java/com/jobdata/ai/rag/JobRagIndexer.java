@@ -5,6 +5,7 @@ import com.jobdata.entity.JobInfo51Job;
 import com.jobdata.service.JobInfo51JobService;
 import com.jobdata.service.JobInfoService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -15,6 +16,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
 
 /**
  * 岗位 RAG 索引器，负责将岗位数据构建为向量文档并存入向量数据库
@@ -43,6 +46,16 @@ public class JobRagIndexer {
      * @return 索引结果统计
      */
     public Map<String, Object> reindexJobs(String source, Integer limit, boolean resetVectorStore) {
+        return reindexJobs(source, limit, resetVectorStore, null, null);
+    }
+
+    public Map<String, Object> reindexJobs(
+            String source,
+            Integer limit,
+            boolean resetVectorStore,
+            AtomicBoolean cancel,
+            BiConsumer<Integer, Integer> progress
+    ) {
         String src = source == null ? "all" : source.trim().toLowerCase();
         int lim = limit == null ? 0 : Math.max(0, limit);
 
@@ -53,56 +66,143 @@ public class JobRagIndexer {
             }
         }
 
-        List<Document> docs = new ArrayList<>();
+        int total = estimateTotal(src, lim);
+        int processed = 0;
+        if (progress != null) progress.accept(processed, total);
+
+        int batchSize = 10;
+        List<Document> batch = new ArrayList<>(batchSize);
+
         if ("boss".equals(src) || "all".equals(src)) {
-            List<JobInfo> list;
-            if (lim > 0) {
-                LambdaQueryWrapper<JobInfo> w = new LambdaQueryWrapper<>();
-                w.orderByDesc(JobInfo::getCreatedAt);
-                w.last("LIMIT " + lim);
-                list = jobInfoService.list(w);
-            } else {
-                list = jobInfoService.list();
-            }
-            for (JobInfo j : list) {
-                docs.add(toDocFromBoss(j));
-            }
-        }
-        if ("51job".equals(src) || "all".equals(src)) {
-            List<JobInfo51Job> list;
-            if (lim > 0) {
-                LambdaQueryWrapper<JobInfo51Job> w = new LambdaQueryWrapper<>();
-                w.orderByDesc(JobInfo51Job::getCreatedAt);
-                w.last("LIMIT " + lim);
-                list = jobInfo51JobService.list(w);
-            } else {
-                list = jobInfo51JobService.list();
-            }
-            for (JobInfo51Job j : list) {
-                docs.add(toDocFrom51(j));
-            }
+            processed = indexBoss(lim, cancel, progress, total, processed, batch, batchSize);
         }
 
-        if (!docs.isEmpty()) {
-            int batchSize = 10;
-            for (int i = 0; i < docs.size(); i += batchSize) {
-                int end = Math.min(i + batchSize, docs.size());
-                List<Document> batch = docs.subList(i, end);
-                try {
-                    vectorStore.add(batch);
-                } catch (Exception e) {
-                    System.err.println("Failed to add batch starting at index " + i + ": " + e.getMessage());
-                    throw e;
-                }
-            }
+        if ("51job".equals(src) || "all".equals(src)) {
+            processed = index51Job(lim, cancel, progress, total, processed, batch, batchSize);
+        }
+
+        if (!batch.isEmpty() && (cancel == null || !cancel.get())) {
+            processed += safeAdd(batch);
+            if (progress != null) progress.accept(processed, total);
         }
 
         Map<String, Object> out = new HashMap<>();
         out.put("source", src);
         out.put("limit", lim);
         out.put("reset", resetVectorStore);
-        out.put("documents", docs.size());
+        out.put("documents", processed);
         return out;
+    }
+
+    private int estimateTotal(String src, int lim) {
+        long boss = 0;
+        long job51 = 0;
+        if ("boss".equals(src) || "all".equals(src)) {
+            boss = jobInfoService.count();
+        }
+        if ("51job".equals(src) || "all".equals(src)) {
+            job51 = jobInfo51JobService.count();
+        }
+        long total = boss + job51;
+        if (lim > 0) {
+            long t = 0;
+            if ("boss".equals(src) || "all".equals(src)) t += Math.min(lim, boss);
+            if ("51job".equals(src) || "all".equals(src)) t += Math.min(lim, job51);
+            total = t;
+        }
+        if (total > Integer.MAX_VALUE) return Integer.MAX_VALUE;
+        return (int) total;
+    }
+
+    private int indexBoss(
+            int lim,
+            AtomicBoolean cancel,
+            BiConsumer<Integer, Integer> progress,
+            int total,
+            int processed,
+            List<Document> batch,
+            int batchSize
+    ) {
+        int pageSize = 200;
+        long offset = 0;
+        while (true) {
+            if (cancel != null && cancel.get()) return processed;
+            if (lim > 0 && offset >= lim) return processed;
+
+            int size = lim > 0 ? (int) Math.min(pageSize, (long) lim - offset) : pageSize;
+            Page<JobInfo> page = new Page<>(offset / pageSize + 1, size);
+            LambdaQueryWrapper<JobInfo> w = new LambdaQueryWrapper<>();
+            w.orderByDesc(JobInfo::getCreatedAt);
+            Page<JobInfo> data = jobInfoService.page(page, w);
+            List<JobInfo> records = data.getRecords();
+            if (records == null || records.isEmpty()) return processed;
+
+            for (JobInfo j : records) {
+                if (cancel != null && cancel.get()) return processed;
+                Document doc = toDocFromBoss(j);
+                if (doc == null) continue;
+                batch.add(doc);
+                if (batch.size() >= batchSize) {
+                    processed += safeAdd(batch);
+                    if (progress != null) progress.accept(processed, total);
+                }
+            }
+            offset += records.size();
+            if (records.size() < size) return processed;
+        }
+    }
+
+    private int index51Job(
+            int lim,
+            AtomicBoolean cancel,
+            BiConsumer<Integer, Integer> progress,
+            int total,
+            int processed,
+            List<Document> batch,
+            int batchSize
+    ) {
+        int pageSize = 200;
+        long offset = 0;
+        while (true) {
+            if (cancel != null && cancel.get()) return processed;
+            if (lim > 0 && offset >= lim) return processed;
+
+            int size = lim > 0 ? (int) Math.min(pageSize, (long) lim - offset) : pageSize;
+            Page<JobInfo51Job> page = new Page<>(offset / pageSize + 1, size);
+            LambdaQueryWrapper<JobInfo51Job> w = new LambdaQueryWrapper<>();
+            w.orderByDesc(JobInfo51Job::getCreatedAt);
+            Page<JobInfo51Job> data = jobInfo51JobService.page(page, w);
+            List<JobInfo51Job> records = data.getRecords();
+            if (records == null || records.isEmpty()) return processed;
+
+            for (JobInfo51Job j : records) {
+                if (cancel != null && cancel.get()) return processed;
+                Document doc = toDocFrom51(j);
+                if (doc == null) continue;
+                batch.add(doc);
+                if (batch.size() >= batchSize) {
+                    processed += safeAdd(batch);
+                    if (progress != null) progress.accept(processed, total);
+                }
+            }
+            offset += records.size();
+            if (records.size() < size) return processed;
+        }
+    }
+
+    private int safeAdd(List<Document> docs) {
+        if (docs == null || docs.isEmpty()) return 0;
+        int max = 10;
+        int added = 0;
+        int from = 0;
+        while (from < docs.size()) {
+            int to = Math.min(docs.size(), from + max);
+            vectorStore.add(docs.subList(from, to));
+            added += (to - from);
+            from = to;
+        }
+        docs.clear();
+        return added;
     }
 
 
@@ -129,7 +229,9 @@ public class JobRagIndexer {
         putStr(meta, "company_welfare", j.getCompanyWelfare());
         put(meta, "publish_date", j.getPublishDate());
         meta.put("title", title(j.getJobName(), j.getCompanyName(), j.getCity()));
-        return new Document(buildJobText(j.getJobName(), j.getCompanyName(), j.getCity(), j.getEducation(), j.getExperience(), j.getJobKeywords(), j.getJobDesc()), meta);
+        String text = buildJobText(j.getJobName(), j.getCompanyName(), j.getCity(), j.getEducation(), j.getExperience(), j.getJobKeywords(), j.getJobDesc());
+        if (!StringUtils.hasText(text)) return null;
+        return new Document(text, meta);
     }
 
     /**
@@ -155,7 +257,9 @@ public class JobRagIndexer {
         putStr(meta, "company_welfare", j.getCompanyWelfare());
         put(meta, "publish_date", j.getPublishDate());
         meta.put("title", title(j.getJobName(), j.getCompanyName(), j.getCity()));
-        return new Document(buildJobText(j.getJobName(), j.getCompanyName(), j.getCity(), j.getEducation(), j.getExperience(), j.getJobKeywords(), j.getJobDesc()), meta);
+        String text = buildJobText(j.getJobName(), j.getCompanyName(), j.getCity(), j.getEducation(), j.getExperience(), j.getJobKeywords(), j.getJobDesc());
+        if (!StringUtils.hasText(text)) return null;
+        return new Document(text, meta);
     }
 
     /**
@@ -193,11 +297,11 @@ public class JobRagIndexer {
                                 String keywords, String desc) {
         StringBuilder sb = new StringBuilder();
 
-        // 岗位名称 - 重复三次增大向量权重，使检索时优先匹配岗位角色
+        // 岗位名称
         if (StringUtils.hasText(jobName)) {
             String text = jobName.trim();
             if (text.length() > 100) text = text.substring(0, 100);
-            sb.append(text).append(" ").append(text).append(" ").append(text).append("\n");
+            sb.append(text).append("\n");
         }
 
         // 公司名称 - 最多 100 字符

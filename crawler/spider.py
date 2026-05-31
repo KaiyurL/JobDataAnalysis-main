@@ -53,7 +53,7 @@ def scrape_jobs(platform_override=None, browser_override=None):
 
     KEYWORDS = config.get("keywords", ["Java", "Python", "前端", "数据分析", "产品经理"])
     CITIES = config.get("cities", ["北京", "上海", "广州", "深圳", "杭州"])
-    PAGES_PER_KEYWORD = int(config.get("pages_per_keyword", 2))
+    PAGES_PER_KEYWORD = min(int(config.get("pages_per_keyword", 2)), 80)
     PAGES_PER_CITY_51JOB = int(config.get("pages_per_city_51job", 2))
     DELAY_MIN = int(config.get("delay_min", 3))
     DELAY_MAX = int(config.get("delay_max", 8))
@@ -77,7 +77,7 @@ def scrape_jobs(platform_override=None, browser_override=None):
     print(f"  数据源: {platform}")
     print(f"  关键词: {', '.join(KEYWORDS)}")
     print(f"  城市: {', '.join(CITIES)}")
-    print(f"  Boss每关键词页数: {PAGES_PER_KEYWORD}")
+    print(f"  Boss每页滚轮次数数: {PAGES_PER_KEYWORD}")
     print(f"  51job每城市页数: {PAGES_PER_CITY_51JOB}")
     print(f"  延迟范围: {DELAY_MIN}-{DELAY_MAX} 秒")
     print(f"  浏览器: {browser}")

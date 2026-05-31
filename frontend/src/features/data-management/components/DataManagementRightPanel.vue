@@ -78,8 +78,13 @@
         <el-icon><Refresh /></el-icon>
         重建向量索引
       </el-button>
-      <div v-if="reindexResult != null" style="margin-top: 12px" class="reindex-result">
-        <el-tag v-if="reindexResult != null" type="success" effect="plain">已索引 {{ reindexResult }} 个岗位</el-tag>
+      <div v-if="reindexing || reindexResult != null" style="margin-top: 12px" class="reindex-result">
+        <el-tag v-if="reindexing" type="info" effect="plain">
+          {{ reindexProgress.total > 0 ? `重建中 ${reindexProgress.processed}/${reindexProgress.total}` : '重建中...' }}
+        </el-tag>
+        <el-tag v-if="reindexResult != null" type="success" effect="plain" style="margin-left: 8px">
+          已索引 {{ reindexResult }} 个岗位
+        </el-tag>
       </div>
     </div>
   </el-card>
@@ -121,6 +126,7 @@ defineProps({
   setLogContainer: { type: Function, required: true },
   reindexing: { type: Boolean, required: true },
   reindexResult: { type: Number, required: false, default: undefined },
+  reindexProgress: { type: Object, required: true },
   stopping: { type: Boolean, required: true },
   startUpdate: { type: Function, required: true },
   confirmLogin: { type: Function, required: true },

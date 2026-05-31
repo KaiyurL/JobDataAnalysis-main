@@ -51,6 +51,7 @@
           :set-log-container="setLogContainer"
           :reindexing="reindexing"
           :reindex-result="reindexResult == null ? undefined : reindexResult"
+          :reindex-progress="reindexProgress"
           :stopping="stopping"
           :start-update="startUpdate"
           :confirm-login="confirmLogin"
@@ -93,6 +94,7 @@ const {
   stopping,
   reindexing,
   reindexResult,
+  reindexProgress,
   handleReindex,
   loadData,
   saveConfig,

@@ -14,7 +14,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,6 +51,9 @@ public class PipelineServiceImpl implements PipelineService {
     private volatile List<String> lastErrors = new ArrayList<>();
     private volatile Map<String, Object> lastFingerprint = new LinkedHashMap<>();
     private volatile Boolean lastCached = false;
+    private volatile String currentKind = null;
+    private volatile Long lastDashboardDurationSeconds = null;
+    private volatile Long lastStatsDurationSeconds = null;
 
     private final Deque<Map<String, String>> logs = new ArrayDeque<>();
     private final Object lock = new Object();
@@ -92,6 +98,7 @@ public class PipelineServiceImpl implements PipelineService {
                     && cache.runDir != null && cache.artifacts != null
                     && artifactsLookUsable(cache.runDir, cache.artifacts)) {
                 status = "idle";
+                currentKind = "dashboard";
                 lastStartTime = LocalDateTime.now();
                 lastEndTime = LocalDateTime.now();
                 lastExitCode = 0;
@@ -115,6 +122,7 @@ public class PipelineServiceImpl implements PipelineService {
             }
 
             status = "running";
+            currentKind = "dashboard";
             lastStartTime = LocalDateTime.now();
             lastEndTime = null;
             lastExitCode = null;
@@ -150,6 +158,12 @@ public class PipelineServiceImpl implements PipelineService {
                     addLog("[ERROR] " + e.getMessage());
                 } finally {
                     lastEndTime = LocalDateTime.now();
+                    if (Boolean.FALSE.equals(lastCached) && lastExitCode != null && lastExitCode == 0 && lastStartTime != null) {
+                        long d = Duration.between(lastStartTime, lastEndTime).getSeconds();
+                        if (d > 0) {
+                            lastDashboardDurationSeconds = d;
+                        }
+                    }
                     currentProcess = null;
                 }
             }, "pipeline-dashboard-runner").start();
@@ -193,6 +207,7 @@ public class PipelineServiceImpl implements PipelineService {
                     && mapper.valueToTree(lastFingerprint).equals(mapper.valueToTree(fingerprint))
                     && lastArtifacts != null && artifactExists(lastArtifacts.get("top_tokens"))) {
                 status = "idle";
+                currentKind = "stats";
                 lastStartTime = LocalDateTime.now();
                 lastEndTime = LocalDateTime.now();
                 lastExitCode = 0;
@@ -213,6 +228,7 @@ public class PipelineServiceImpl implements PipelineService {
             }
 
             status = "running";
+            currentKind = "stats";
             lastStartTime = LocalDateTime.now();
             lastEndTime = null;
             lastExitCode = null;
@@ -234,6 +250,12 @@ public class PipelineServiceImpl implements PipelineService {
                     addLog("[ERROR] " + e.getMessage());
                 } finally {
                     lastEndTime = LocalDateTime.now();
+                    if (Boolean.FALSE.equals(lastCached) && lastExitCode != null && lastExitCode == 0 && lastStartTime != null) {
+                        long d = Duration.between(lastStartTime, lastEndTime).getSeconds();
+                        if (d > 0) {
+                            lastStatsDurationSeconds = d;
+                        }
+                    }
                     currentProcess = null;
                 }
             }, "pipeline-stats-runner").start();
@@ -260,6 +282,25 @@ public class PipelineServiceImpl implements PipelineService {
         result.put("lastExitCode", lastExitCode);
         result.put("message", lastMessage);
         result.put("runDir", lastRunDir);
+        result.put("kind", currentKind);
+        result.put("serverNowMs", System.currentTimeMillis());
+
+        Long estimate = null;
+        if ("running".equals(status)) {
+            if ("dashboard".equals(currentKind)) {
+                estimate = lastDashboardDurationSeconds;
+            } else if ("stats".equals(currentKind)) {
+                estimate = lastStatsDurationSeconds;
+            }
+        }
+        result.put("estimatedTotalSeconds", estimate);
+        if (estimate != null && lastStartTime != null) {
+            ZonedDateTime zdt = lastStartTime.atZone(ZoneId.systemDefault());
+            long endMs = zdt.toInstant().toEpochMilli() + estimate * 1000L;
+            result.put("estimatedEndMs", endMs);
+        } else {
+            result.put("estimatedEndMs", null);
+        }
         synchronized (logs) {
             result.put("logs", new ArrayList<>(logs));
         }
@@ -560,7 +601,7 @@ public class PipelineServiceImpl implements PipelineService {
             if (!base.toFile().exists()) {
                 return false;
             }
-            String[] must = new String[]{"jobs_clean_csv", "jobs_reduced_csv"};
+            String[] must = new String[]{"jobs_clean_csv", "jobs_reduced_csv", "cluster_scatter_svg"};
             for (String k : must) {
                 String p = artifacts.get(k);
                 if (p == null || p.trim().isEmpty()) {
@@ -697,7 +738,7 @@ public class PipelineServiceImpl implements PipelineService {
         }
 
         if (artifacts != null) {
-            summary.put("cluster_ready", artifacts.get("cluster_scatter_png") != null);
+            summary.put("cluster_ready", artifacts.get("cluster_scatter_svg") != null);
             summary.put("mlp_ready", artifacts.get("mlp_history") != null);
             summary.put("textcnn_ready", artifacts.get("textcnn_history") != null);
         }

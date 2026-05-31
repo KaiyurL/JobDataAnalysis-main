@@ -124,6 +124,9 @@ public class PipelineController {
         if (n.endsWith(".jpg") || n.endsWith(".jpeg")) {
             return MediaType.IMAGE_JPEG;
         }
+        if (n.endsWith(".svg")) {
+            return MediaType.valueOf("image/svg+xml");
+        }
         if (n.endsWith(".json")) {
             return MediaType.APPLICATION_JSON;
         }

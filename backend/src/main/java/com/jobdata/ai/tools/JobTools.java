@@ -13,8 +13,10 @@ import org.springframework.util.StringUtils;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 岗位检索工具类，提供大模型可调用的 job_search 工具
@@ -103,13 +105,27 @@ public class JobTools {
             w.like(JobInfo::getCompanyName, company.trim());
         }
         if (StringUtils.hasText(city)) {
-            w.in(JobInfo::getCity, Arrays.asList(city.split(",")));
+            List<String> cities = cityVariants(city);
+            if (!cities.isEmpty()) {
+                w.and(x -> {
+                    boolean first = true;
+                    for (String c : cities) {
+                        if (!StringUtils.hasText(c)) continue;
+                        if (first) {
+                            x.like(JobInfo::getCity, c);
+                            first = false;
+                        } else {
+                            x.or().like(JobInfo::getCity, c);
+                        }
+                    }
+                });
+            }
         }
         if (StringUtils.hasText(education)) {
-            w.eq(JobInfo::getEducation, education.trim());
+            w.like(JobInfo::getEducation, education.trim());
         }
         if (StringUtils.hasText(experience)) {
-            w.eq(JobInfo::getExperience, experience.trim());
+            applyExperienceFilter(w, JobInfo::getExperience, experience);
         }
         if (minSalaryK != null) {
             w.ge(JobInfo::getSalaryMax, minSalaryK);
@@ -150,13 +166,27 @@ public class JobTools {
             w.like(JobInfo51Job::getCompanyName, company.trim());
         }
         if (StringUtils.hasText(city)) {
-            w.in(JobInfo51Job::getCity, Arrays.asList(city.split(",")));
+            List<String> cities = cityVariants(city);
+            if (!cities.isEmpty()) {
+                w.and(x -> {
+                    boolean first = true;
+                    for (String c : cities) {
+                        if (!StringUtils.hasText(c)) continue;
+                        if (first) {
+                            x.like(JobInfo51Job::getCity, c);
+                            first = false;
+                        } else {
+                            x.or().like(JobInfo51Job::getCity, c);
+                        }
+                    }
+                });
+            }
         }
         if (StringUtils.hasText(education)) {
-            w.eq(JobInfo51Job::getEducation, education.trim());
+            w.like(JobInfo51Job::getEducation, education.trim());
         }
         if (StringUtils.hasText(experience)) {
-            w.eq(JobInfo51Job::getExperience, experience.trim());
+            applyExperienceFilter(w, JobInfo51Job::getExperience, experience);
         }
         if (minSalaryK != null) {
             w.ge(JobInfo51Job::getSalaryMax, minSalaryK);
@@ -225,5 +255,59 @@ public class JobTools {
         m.put("publishDate", j.getPublishDate());
         m.put("createdAt", j.getCreatedAt());
         return m;
+    }
+
+    private List<String> cityVariants(String city) {
+        Set<String> out = new LinkedHashSet<>();
+        if (!StringUtils.hasText(city)) {
+            return List.of();
+        }
+        String[] parts = city.split("[,，/\\s]+");
+        for (String p : parts) {
+            String t = p == null ? "" : p.trim();
+            if (t.isEmpty()) continue;
+            out.add(t);
+            if (t.endsWith("市") && t.length() > 1) {
+                out.add(t.substring(0, t.length() - 1));
+            } else {
+                out.add(t + "市");
+            }
+        }
+        return new ArrayList<>(out);
+    }
+
+    private boolean isFreshGraduateLike(String exp) {
+        if (!StringUtils.hasText(exp)) return false;
+        String s = exp.trim();
+        return s.contains("应届") || s.contains("在校") || s.contains("校招") || s.contains("实习") || s.contains("毕业");
+    }
+
+    private boolean isNoConstraintExperience(String exp) {
+        if (!StringUtils.hasText(exp)) return true;
+        String s = exp.trim();
+        return s.contains("不限") || s.contains("经验不限");
+    }
+
+    private <T> void applyExperienceFilter(LambdaQueryWrapper<T> w, com.baomidou.mybatisplus.core.toolkit.support.SFunction<T, ?> column, String experience) {
+        String exp = experience == null ? "" : experience.trim();
+        if (exp.isEmpty() || isNoConstraintExperience(exp)) {
+            return;
+        }
+        if (isFreshGraduateLike(exp)) {
+            List<String> tokens = List.of("应届", "在校", "校招", "实习", "经验不限", "不限", "无经验", "1年以内", "1年以下", "0-1年");
+            w.and(x -> {
+                boolean first = true;
+                for (String t : tokens) {
+                    if (first) {
+                        x.like(column, t);
+                        first = false;
+                    } else {
+                        x.or().like(column, t);
+                    }
+                }
+            });
+            return;
+        }
+        w.like(column, exp);
     }
 }

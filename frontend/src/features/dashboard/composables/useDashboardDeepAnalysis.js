@@ -27,10 +27,20 @@ export function useDashboardDeepAnalysis(deps) {
   const pipelineMessage = ref('')
   const pipelineSummary = ref({})
   const pipelineErrors = ref([])
-  const pipelineImageUrls = ref({ cluster: '' })
-  const pipelineObjectUrls = ref({ cluster: '' })
+  const pipelineClusterSvg = ref('')
   const pipelinePollTimer = ref(null)
   const pipelineProgress = ref(0)
+  const pipelineEstimatedEndMs = ref(0)
+  const pipelineEstimatedTotalSeconds = ref(0)
+  const pipelineEtaText = computed(() => {
+    const endMs = Number(pipelineEstimatedEndMs.value || 0)
+    const totalSec = Number(pipelineEstimatedTotalSeconds.value || 0)
+    if (!endMs || !totalSec) return ''
+    if (totalSec < 60) return `预计完成（约 ${totalSec}s）`
+    const m = Math.floor(totalSec / 60)
+    const sec = totalSec % 60
+    return `预计完成（约 ${m}m${sec}s）`
+  })
 
   const jobSkillHeatmapPayload = ref(null)
   const jobSkillHeatmapReady = computed(() =>
@@ -48,11 +58,27 @@ export function useDashboardDeepAnalysis(deps) {
   const eduExpSalaryBubbleReady = computed(() =>
     Boolean(eduExpSalaryBubblePayload.value && eduExpSalaryBubblePayload.value.x && eduExpSalaryBubblePayload.value.y)
   )
+  const eduExpSalaryBubbleStatsText = computed(() => {
+    const p = eduExpSalaryBubblePayload.value
+    if (!p) return ''
+    const total = Number(p.total_rows_used || 0)
+    const shown = Number(p.shown_rows_used || 0)
+    const sc = p.source_counts || {}
+    const boss = Number(sc.job_info || 0)
+    const job51 = Number(sc.job_info_51job || 0)
+    if (total > 0 && shown > 0 && shown !== total) {
+      if (boss > 0 || job51 > 0) return `参与统计：${total}，图上覆盖：${shown}（BOSS ${boss} / 51job ${job51}）`
+      return `参与统计：${total}，图上覆盖：${shown}`
+    }
+    if (total > 0 && (boss > 0 || job51 > 0)) return `参与统计：${total}（BOSS ${boss} / 51job ${job51}）`
+    if (total > 0) return `参与统计：${total}`
+    return ''
+  })
 
   const deepChartOptions = [
     { value: 'cluster', label: 'NLP 语义聚类地图' },
     { value: 'heatmap', label: '岗位-技能热力图' },
-    { value: 'timeline', label: '技术招聘趋势' },
+    { value: 'timeline', label: '前程技术招聘趋势' },
     { value: 'company_size_salary', label: '公司规模-薪资' },
     { value: 'edu_exp_bubble', label: '学历 × 经验 薪资气泡图' }
   ]
@@ -76,8 +102,7 @@ export function useDashboardDeepAnalysis(deps) {
    * - 释放后同步清空展示用的图片 URL，避免 UI 继续引用已释放资源。
    */
   const revokePipelineUrls = () => {
-    if (pipelineObjectUrls.value.cluster) URL.revokeObjectURL(pipelineObjectUrls.value.cluster)
-    pipelineImageUrls.value.cluster = ''
+    pipelineClusterSvg.value = ''
   }
 
   const ensureHeatmapChart = async () => {
@@ -228,6 +253,10 @@ export function useDashboardDeepAnalysis(deps) {
     if (!p || !Array.isArray(p.months) || !Array.isArray(p.series)) return
 
     const lineColors = ['#0ea5e9', '#f43f5e', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#84cc16', '#6366f1']
+    const legendSelected = {}
+    p.series.forEach((s, idx) => {
+      legendSelected[s.name] = idx < 4
+    })
 
     skillTimelineChart.setOption(
       {
@@ -252,7 +281,8 @@ export function useDashboardDeepAnalysis(deps) {
           type: 'scroll',
           itemGap: 15,
           itemWidth: 12,
-          itemHeight: 12
+          itemHeight: 12,
+          selected: legendSelected
         },
         grid: {
           top: 70,
@@ -333,12 +363,6 @@ export function useDashboardDeepAnalysis(deps) {
             showSymbol: false,
             lineStyle: { width: 3, color: color },
             itemStyle: { color: color },
-            areaStyle: {
-              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: color + '44' },
-                { offset: 1, color: color + '00' }
-              ])
-            },
             emphasis: {
               focus: 'series',
               itemStyle: {
@@ -601,12 +625,14 @@ export function useDashboardDeepAnalysis(deps) {
     pipelineSummary.value = data.summary
     pipelineErrors.value = data.errors
 
-    if (data.artifacts?.cluster_scatter_png) {
-      const blobRes = await pipelineApi.getPipelineFile('cluster_scatter_png')
+    if (data.artifacts?.cluster_scatter_svg) {
+      const blobRes = await pipelineApi.getPipelineFile('cluster_scatter_svg')
       if (blobRes?.data) {
-        const url = URL.createObjectURL(blobRes.data)
-        pipelineObjectUrls.value.cluster = url
-        pipelineImageUrls.value.cluster = url
+        const raw = await blobRes.data.text()
+        const cleaned = raw
+          .replace(/^<\?xml[\s\S]*?\?>\s*/i, '')
+          .replace(/<!DOCTYPE[\s\S]*?>\s*/i, '')
+        pipelineClusterSvg.value = cleaned
       }
     }
 
@@ -673,7 +699,9 @@ export function useDashboardDeepAnalysis(deps) {
    */
   const startPipeline = async (force = false) => {
     pipelineRunning.value = true
-    pipelineProgress.value = 10
+    pipelineProgress.value = 0
+    pipelineEstimatedEndMs.value = 0
+    pipelineEstimatedTotalSeconds.value = 0
     pipelineStatus.value = 'running'
     revokePipelineUrls()
     if (pipelinePollTimer.value) clearInterval(pipelinePollTimer.value)
@@ -689,10 +717,19 @@ export function useDashboardDeepAnalysis(deps) {
         return
       }
 
+      try {
+        const s0 = await pipelineApi.getPipelineStatusData()
+        if (s0?.estimatedEndMs && !pipelineEstimatedEndMs.value) pipelineEstimatedEndMs.value = Number(s0.estimatedEndMs)
+        if (s0?.estimatedTotalSeconds && !pipelineEstimatedTotalSeconds.value) pipelineEstimatedTotalSeconds.value = Number(s0.estimatedTotalSeconds)
+      } catch {
+      }
+
       pipelinePollTimer.value = setInterval(async () => {
         const s = await pipelineApi.getPipelineStatusData()
         pipelineStatus.value = s.status
         pipelineMessage.value = s.message
+        if (s?.estimatedEndMs && !pipelineEstimatedEndMs.value) pipelineEstimatedEndMs.value = Number(s.estimatedEndMs)
+        if (s?.estimatedTotalSeconds && !pipelineEstimatedTotalSeconds.value) pipelineEstimatedTotalSeconds.value = Number(s.estimatedTotalSeconds)
         pipelineProgress.value = Math.min(95, pipelineProgress.value + 5)
         if (s.status !== 'running') {
           pipelineRunning.value = false
@@ -806,12 +843,14 @@ export function useDashboardDeepAnalysis(deps) {
     pipelineMessage,
     pipelineSummary,
     pipelineErrors,
-    pipelineImageUrls,
+    pipelineClusterSvg,
     pipelineProgress,
+    pipelineEtaText,
     jobSkillHeatmapReady,
     skillTimelineReady,
     companySizeSalaryReady,
     eduExpSalaryBubbleReady,
+    eduExpSalaryBubbleStatsText,
     deepChartOptions,
     selectedDeepChart,
     jobSkillHeatmapRef,

@@ -182,6 +182,9 @@ export function useDataManagement() {
 
   const reindexing = ref(false)
   const reindexResult = ref(null)
+  const reindexJob = ref(null)
+  const reindexProgress = ref({ status: 'idle', processed: 0, total: 0 })
+  let reindexPollTimer = null
 
   /**
    * 重建向量索引（供 RAG 检索使用）。
@@ -195,16 +198,64 @@ export function useDataManagement() {
   const handleReindex = async () => {
     reindexing.value = true
     reindexResult.value = null
+    reindexJob.value = null
+    reindexProgress.value = { status: 'idle', processed: 0, total: 0 }
     try {
-      const data = await ragApi.reindexJobsData({ source: 'all', limit: 0, reset: true })
-      reindexResult.value = data.documents || 0
-      ElMessage.success(`向量索引已重建，共索引 ${data.documents || 0} 个岗位`)
+      const start = await ragApi.reindexJobsAsyncData({ source: 'all', limit: 0, reset: true })
+      const jobId = start.jobId
+      reindexJob.value = jobId
+      reindexProgress.value = {
+        status: start.status || 'running',
+        processed: start.processed || 0,
+        total: start.total || 0
+      }
+
+      ElMessage.success('已提交重建任务，后台正在执行…')
+
+      if (reindexPollTimer != null) {
+        clearInterval(reindexPollTimer)
+        reindexPollTimer = null
+      }
+
+      reindexPollTimer = setInterval(async () => {
+        try {
+          const st = await ragApi.reindexJobsStatusData({ jobId })
+          reindexProgress.value = {
+            status: st.status || 'running',
+            processed: st.processed || 0,
+            total: st.total || 0
+          }
+
+          if (st.status === 'done') {
+            const docs = st.result?.documents || 0
+            reindexResult.value = docs
+            ElMessage.success(`向量索引已重建，共索引 ${docs} 个岗位`)
+            clearInterval(reindexPollTimer)
+            reindexPollTimer = null
+            reindexing.value = false
+          } else if (st.status === 'failed') {
+            ElMessage.error('重建索引失败: ' + (st.message || '未知错误'))
+            clearInterval(reindexPollTimer)
+            reindexPollTimer = null
+            reindexing.value = false
+          } else if (st.status === 'cancelled') {
+            ElMessage.warning('重建任务已取消')
+            clearInterval(reindexPollTimer)
+            reindexPollTimer = null
+            reindexing.value = false
+          }
+        } catch (e) {
+          console.error(e)
+        }
+      }, 2000)
     } catch (e) {
       console.error(e)
       const msg = e?.response?.data?.message || e?.message || '重建索引失败'
       ElMessage.error('重建索引失败: ' + msg)
     } finally {
-      reindexing.value = false
+      if (reindexPollTimer == null) {
+        reindexing.value = false
+      }
     }
   }
 
@@ -501,6 +552,7 @@ export function useDataManagement() {
   onUnmounted(() => {
     if (pollTimer) clearInterval(pollTimer)
     if (disabledTimer) clearTimeout(disabledTimer)
+    if (reindexPollTimer != null) clearInterval(reindexPollTimer)
   })
 
   return {
@@ -529,6 +581,8 @@ export function useDataManagement() {
     stopping,
     reindexing,
     reindexResult,
+    reindexJob,
+    reindexProgress,
     handleReindex,
     loadData,
     loadConfig,

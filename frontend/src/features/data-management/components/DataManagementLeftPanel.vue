@@ -108,10 +108,10 @@
         <div class="form-tip">从下拉选择或直接输入搜索</div>
       </el-form-item>
 
-      <el-form-item v-if="config.platform !== '51job'" label="BOSS滚动次数">
-        <el-input-number v-model="config.pages_per_keyword" :min="1" :max="200" />
+      <el-form-item v-if="config.platform !== '51job'" label="BOSS滚动次数（1-80次）">
+        <el-input-number v-model="config.pages_per_keyword" :min="1" :max="80" />
         <span style="margin-left: 10px">次/关键词</span>
-        <div class="form-tip">用于滚动加载岗位卡片（不是传统页码）</div>
+        <div class="form-tip">用于滚动加载岗位卡片（不是传统页码，每个关键词滚动最多滚动80次，每次最多300条岗位）</div>
       </el-form-item>
 
       <el-form-item v-if="config.platform !== 'boss'" label="前程无忧页数">

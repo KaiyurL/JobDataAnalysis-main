@@ -46,35 +46,23 @@ def export_job_skill_heatmap(
     if "job_name" not in df.columns:
         return {}
 
-    token_col: Optional[str] = None
-    for c in token_col_candidates:
-        if c in df.columns:
-            token_col = c
-            break
-    if token_col is None:
-        return {}
-
     def norm_role(s: str) -> str:
         t = str(s or "").strip()
         if not t:
             return ""
         t = re.sub(r"[\[\]（）()【】]", " ", t)
         t = re.sub(r"\s+", " ", t).strip()
-        if len(t) > 18:
-            t = t[:18]
+        t = t.lower()
+        t = re.sub(r"\s+", " ", t).strip()
+        if t in {"开发", "it", "系统"}:
+            return ""
+        if len(t) > 60:
+            t = t[:60]
         return t
 
     tmp = df.copy()
+    tmp["role_raw"] = tmp["job_name"].map(lambda x: re.sub(r"\s+", " ", re.sub(r"[\[\]（）()【】]", " ", str(x or "").strip())).strip())
     tmp["role"] = tmp["job_name"].map(norm_role)
-    tmp = tmp[tmp["role"].astype(str).str.len() > 0].copy()
-    if tmp.empty:
-        return {}
-
-    role_counts = tmp["role"].value_counts().head(int(top_roles))
-    roles: List[str] = role_counts.index.tolist()
-    tmp = tmp[tmp["role"].isin(roles)].copy()
-    if tmp.empty:
-        return {}
 
     deny = {
         "精神",
@@ -191,13 +179,12 @@ def export_job_skill_heatmap(
             return False
         return True
 
-    def to_token_set(v) -> List[str]:
-        if v is None:
+    def parse_job_keywords(v) -> List[str]:
+        s = str(v or "").strip()
+        if not s or s.lower() in {"nan", "none"}:
             return []
-        if isinstance(v, list):
-            xs = [str(x or "").strip().lower() for x in v]
-        else:
-            xs = [str(x or "").strip().lower() for x in str(v).split()]
+        parts = re.split(r"[,，;；/|\\\s]+", s)
+        xs = [p.strip().lower() for p in parts if p and p.strip()]
         out = []
         seen = set()
         for x in xs:
@@ -213,7 +200,48 @@ def export_job_skill_heatmap(
             out.append(x)
         return out
 
-    tmp["_tok"] = tmp[token_col].map(to_token_set)
+    token_col: Optional[str] = None
+    for c in token_col_candidates:
+        if c in tmp.columns:
+            token_col = c
+            break
+
+    if "job_keywords" not in tmp.columns and token_col is None:
+        return {}
+
+    if "job_keywords" in tmp.columns and token_col is not None:
+        token_source = f"job_keywords_or_{token_col}"
+    elif "job_keywords" in tmp.columns:
+        token_source = "job_keywords"
+    else:
+        token_source = token_col
+
+    def tokens_for_row(r: pd.Series) -> List[str]:
+        kw = parse_job_keywords(r.get("job_keywords")) if "job_keywords" in tmp.columns else []
+        if kw:
+            return kw
+        if token_col is None:
+            return []
+        v = r.get(token_col)
+        if isinstance(v, list):
+            return parse_job_keywords(" ".join([str(x or "") for x in v]))
+        return parse_job_keywords(str(v or ""))
+
+    tmp["_tok"] = tmp.apply(tokens_for_row, axis=1)
+
+    tmp = tmp[(tmp["role"].astype(str).str.len() > 0) & (tmp["_tok"].map(lambda xs: isinstance(xs, list) and len(xs) > 0))].copy()
+    if tmp.empty:
+        return {}
+
+    role_count_raw = int(tmp["role_raw"].nunique()) if "role_raw" in tmp.columns else 0
+    role_count_after_norm = int(tmp["role"].nunique())
+
+    role_counts = tmp["role"].value_counts().head(int(top_roles))
+    roles: List[str] = role_counts.index.tolist()
+    tmp = tmp[tmp["role"].isin(roles)].copy()
+    if tmp.empty:
+        return {}
+
     all_tokens = [t for xs in tmp["_tok"].tolist() for t in (xs or [])]
     if not all_tokens:
         return {}
@@ -244,13 +272,24 @@ def export_job_skill_heatmap(
     nonzero = matrix[matrix > 0]
     max_clip = int(np.percentile(nonzero, 95)) if nonzero.size else 0
 
+    source_filter = "all" if "source_table" in tmp.columns else "unknown"
+    source_counts = tmp["source_table"].astype(str).value_counts().to_dict() if "source_table" in tmp.columns else None
+
     payload = {
         "x": skills,
         "y": roles,
         "data": triples,
         "max": int(matrix.max()) if matrix.size else 0,
         "max_clip": int(max_clip),
-        "token_col": token_col,
+        "token_col": token_source,
+        "source_filter": source_filter,
+        "source_counts": source_counts,
+        "rows_used": int(len(tmp)),
+        "role_count_raw": role_count_raw,
+        "role_count_after_norm": role_count_after_norm,
+        "top_roles": int(top_roles),
+        "top_skills": int(top_skills),
+        "schema": {"triple": ["skill_index", "role_index", "count"]},
     }
 
     p_json = os.path.join(out_dir, "job_skill_heatmap.json")
@@ -381,8 +420,13 @@ def run_cluster(
         ax.scatter(sub["dim1"], sub["dim2"], s=9, color=color, alpha=0.62, label=label, linewidths=0)
 
     ax.set_title(f"招聘岗位文本主题聚类（{reduce_name}+KMeans，K={n_clusters}，采样={len(df_plot)}/{n_samples}）")
-    ax.set_xlabel("降维维度1")
-    ax.set_ylabel("降维维度2")
+    axis_name = "降维"
+    if str(reduce_name).lower().startswith("tsne"):
+        axis_name = "t-SNE"
+    elif str(reduce_name).lower().startswith("svd"):
+        axis_name = "SVD"
+    ax.set_xlabel(f"{axis_name} 维度1")
+    ax.set_ylabel(f"{axis_name} 维度2")
     ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.18)
 
     leg = ax.legend(
@@ -399,11 +443,11 @@ def run_cluster(
     except Exception:
         pass
 
-    p_png = os.path.join(out_dir, "cluster_scatter.png")
+    p_svg = os.path.join(out_dir, "cluster_scatter.svg")
     fig.tight_layout(rect=[0, 0, 0.80, 1])
-    fig.savefig(p_png, dpi=180)
+    fig.savefig(p_svg, format="svg")
     plt.close(fig)
-    paths["cluster_scatter_png"] = p_png
+    paths["cluster_scatter_svg"] = p_svg
 
     return paths
 
@@ -424,6 +468,12 @@ def export_skill_timeline(
         return {}
     if "publish_date" not in df.columns:
         return {}
+
+    if "source_table" in df.columns:
+        df51 = df[df["source_table"].astype(str) == "job_info_51job"].copy()
+        if df51.empty:
+            return {}
+        df = df51
 
     token_col: Optional[str] = None
     for c in token_col_candidates:
@@ -577,7 +627,7 @@ def export_company_size_salary_bar(
 def export_edu_exp_salary_bubble(
     df: pd.DataFrame,
     out_dir: str,
-    min_count: int = 5,
+    min_count: int = 1,
     max_exp: int = 14,
     max_edu: int = 8,
 ) -> Dict[str, str]:
@@ -612,7 +662,7 @@ def export_edu_exp_salary_bubble(
             return "高中及以下"
         return s
 
-    def exp_weight_and_label(v) -> Tuple[int, str]:
+    def exp_weight_and_bin(v) -> Tuple[int, str]:
         s = str(v or "").strip()
         if not s or s.lower() in {"nan", "none"}:
             return (999, "未知")
@@ -626,25 +676,45 @@ def export_edu_exp_salary_bubble(
         if m:
             a = int(m.group(1))
             b = int(m.group(2))
-            lo = min(a, b)
-            return (lo + 1, f"{lo}-{max(a, b)}年")
+            years = min(a, b)
         m2 = re.search(r"(\d+)", s2)
         if m2:
             a = int(m2.group(1))
-            if "+" in s2 or "以上" in s2:
-                return (a + 1, f"{a}+年")
-            return (a + 1, f"{a}年")
-        return (998, s)
+            years = a
+        else:
+            return (998, "未知")
 
-    tmp = df[["education", "experience", "salary_avg"]].copy()
+        if years < 1:
+            return (1, "0-1年")
+        if years < 3:
+            return (2, "1-3年")
+        if years < 5:
+            return (3, "3-5年")
+        if years < 10:
+            return (4, "5-10年")
+        return (5, "10+年")
+
+    base_cols = ["education", "experience", "salary_avg"]
+    if "source_table" in df.columns:
+        base_cols = ["source_table"] + base_cols
+    tmp = df[base_cols].copy()
     tmp["salary_avg"] = pd.to_numeric(tmp["salary_avg"], errors="coerce")
     tmp = tmp.dropna(subset=["salary_avg"]).copy()
     tmp = tmp[(tmp["salary_avg"] > 0) & (tmp["salary_avg"] <= 200)].copy()
     if tmp.empty:
         return {}
 
+    source_counts = None
+    if "source_table" in tmp.columns:
+        vc = tmp["source_table"].astype(str).value_counts()
+        source_counts = {
+            "job_info": int(vc.get("job_info", 0)),
+            "job_info_51job": int(vc.get("job_info_51job", 0)),
+        }
+    total_rows_used = int(len(tmp))
+
     tmp["edu_norm"] = tmp["education"].map(norm_edu)
-    exp_w = tmp["experience"].map(exp_weight_and_label)
+    exp_w = tmp["experience"].map(exp_weight_and_bin)
     tmp["exp_w"] = exp_w.map(lambda x: int(x[0]) if isinstance(x, tuple) and len(x) == 2 else 999)
     tmp["exp_norm"] = exp_w.map(lambda x: str(x[1]) if isinstance(x, tuple) and len(x) == 2 else "未知")
 
@@ -658,27 +728,12 @@ def export_edu_exp_salary_bubble(
         return {}
 
     edu_order = ["不限", "高中及以下", "中专/中技", "大专", "本科", "硕士", "博士", "未知"]
-    edu_idx = {k: i for i, k in enumerate(edu_order)}
-    edu_vals = (
-        grp[["edu_norm", "count"]]
-        .groupby("edu_norm", as_index=False)
-        .agg(total=("count", "sum"))
-    )
-    edu_vals["_ord"] = edu_vals["edu_norm"].map(lambda x: edu_idx.get(str(x), 999))
-    edu_vals = edu_vals.sort_values(by=["_ord", "total"], ascending=[True, False]).drop(columns=["_ord"])
-    edu_list = edu_vals["edu_norm"].astype(str).tolist()[: int(max_edu)]
+    exp_order = ["应届/在校", "不限", "0-1年", "1-3年", "3-5年", "5-10年", "10+年", "未知"]
 
-    exp_vals = (
-        grp[["exp_norm", "count", "exp_w"]]
-        .groupby("exp_norm", as_index=False)
-        .agg(total=("count", "sum"), w=("exp_w", "min"))
-        .sort_values(by=["w", "total"], ascending=[True, False])
-    )
-    exp_list = exp_vals["exp_norm"].astype(str).tolist()[: int(max_exp)]
-
-    grp = grp[grp["edu_norm"].isin(edu_list) & grp["exp_norm"].isin(exp_list)].copy()
-    if grp.empty:
-        return {}
+    edu_present = set(grp["edu_norm"].astype(str).tolist())
+    exp_present = set(grp["exp_norm"].astype(str).tolist())
+    edu_list = [x for x in edu_order if x in edu_present]
+    exp_list = [x for x in exp_order if x in exp_present]
 
     exp_index = {x: i for i, x in enumerate(exp_list)}
     edu_index = {y: i for i, y in enumerate(edu_list)}
@@ -687,12 +742,15 @@ def export_edu_exp_salary_bubble(
     max_count = int(grp["count"].max()) if not grp.empty else 0
     salary_min = float(grp["avg_salary"].min()) if not grp.empty else 0.0
     salary_max = float(grp["avg_salary"].max()) if not grp.empty else 0.0
+    shown_rows_used = 0
     for _, r in grp.iterrows():
         xi = exp_index.get(str(r["exp_norm"]))
         yi = edu_index.get(str(r["edu_norm"]))
         if xi is None or yi is None:
             continue
-        data.append([int(xi), int(yi), int(r["count"]), float(r["avg_salary"])])
+        cnt = int(r["count"])
+        shown_rows_used += cnt
+        data.append([int(xi), int(yi), cnt, float(r["avg_salary"])])
 
     payload = {
         "x": exp_list,
@@ -703,6 +761,10 @@ def export_edu_exp_salary_bubble(
         "salary_max": round(salary_max, 2),
         "unit": "K",
     }
+    if source_counts is not None:
+        payload["source_counts"] = source_counts
+    payload["total_rows_used"] = total_rows_used
+    payload["shown_rows_used"] = int(shown_rows_used)
 
     p_json = os.path.join(out_dir, "edu_exp_salary_bubble.json")
     with open(p_json, "w", encoding="utf-8") as f:

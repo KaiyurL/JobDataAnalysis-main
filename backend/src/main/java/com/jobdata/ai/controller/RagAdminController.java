@@ -1,8 +1,10 @@
 package com.jobdata.ai.controller;
 
 import com.jobdata.ai.rag.JobRagIndexer;
+import com.jobdata.ai.rag.RagReindexJobManager;
 import com.jobdata.dto.Result;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -18,9 +20,11 @@ import java.util.Map;
 public class RagAdminController {
 
     private final JobRagIndexer jobRagIndexer;
+    private final RagReindexJobManager ragReindexJobManager;
 
-    public RagAdminController(JobRagIndexer jobRagIndexer) {
+    public RagAdminController(JobRagIndexer jobRagIndexer, RagReindexJobManager ragReindexJobManager) {
         this.jobRagIndexer = jobRagIndexer;
+        this.ragReindexJobManager = ragReindexJobManager;
     }
 
     /**
@@ -41,5 +45,23 @@ public class RagAdminController {
     ) {
         Map<String, Object> out = jobRagIndexer.reindexJobs(source, limit, Boolean.TRUE.equals(reset));
         return Result.success(out);
+    }
+
+    @PostMapping("/reindex/jobs/async")
+    public Result<Map<String, Object>> reindexJobsAsync(
+            Authentication authentication,
+            @RequestParam(defaultValue = "all") String source,
+            @RequestParam(defaultValue = "0") Integer limit,
+            @RequestParam(defaultValue = "true") Boolean reset
+    ) {
+        return Result.success(ragReindexJobManager.start(source, limit, reset));
+    }
+
+    @GetMapping("/reindex/jobs/status")
+    public Result<Map<String, Object>> reindexJobsStatus(
+            Authentication authentication,
+            @RequestParam(required = false) String jobId
+    ) {
+        return Result.success(ragReindexJobManager.status(jobId));
     }
 }

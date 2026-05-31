@@ -18,25 +18,51 @@ spring:
 #    locations: classpath:db/migration
 
   ai:
+    # Embedding 提供方选择：
+    # - ollama：使用本地 Ollama 的 embedding（例如 qwen3-embedding:4b）
+    # - openai：使用 OpenAI Compatible 的 embedding（本项目默认指向 DashScope compatible-mode，例如 text-embedding-v3）
+    #
+    # 说明：这里使用 Spring AI 的标准开关 spring.ai.model.embedding（值为 openai/ollama）。
+    # 本项目不通过环境变量动态切换，直接在本文件中修改即可。
+    model:
+      # Chat 模型固定使用 openai（DashScope compatible-mode）
+      # 解释：引入 spring-ai-starter-model-ollama 后，会同时存在 openai/ollama 两套 ChatModel 自动装配；
+      # 显式指定 spring.ai.model.chat=openai 可避免 ApplicationContext 因 “ChatModel 有多个候选” 启动失败。
+      chat: openai
+      embedding: ollama
+
     openai:
+      # OpenAI Compatible（本项目默认接入阿里云百炼 DashScope compatible-mode）
+      # 注意：这里的 embedding 只有在 spring.ai.model.embedding=openai 时才会生效
       api-key: ${AI_DASHSCOPE_API_KEY:}
       base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
       chat:
         options:
-          model: ${AI_CHAT_MODEL:qwen3.5-omni-plus-2026-03-15}
+          model: qwen3.5-omni-plus-2026-03-15
           temperature: 0.7
           top-p: 0.9
           max-tokens: 1024
       embedding:
         options:
-          model: ${AI_EMBEDDING_MODEL:text-embedding-v3}
+          model: text-embedding-v3
+
+    ollama:
+      # Ollama（本机默认地址 http://localhost:11434）
+      # 注意：这里的 embedding 只有在 spring.ai.model.embedding=ollama 时才会生效
+      base-url: ${AI_OLLAMA_BASE_URL:http://localhost:11434}
+      embedding:
+        options:
+          model: qwen3-embedding:4b
+          # 需要与 pgvector 向量表维度一致（例如 1024）
+          dimensions: 1024
 
     vectorstore:
       pgvector:
         initialize-schema: false
         index-type: hnsw
         distance-type: cosine_distance
-        dimensions: ${AI_EMBEDDING_DIM:1024}
+        # pgvector 向量维度（必须与当前 embedding 模型输出维度一致）
+        dimensions: 1024
 
 mybatis-plus:
   configuration:
@@ -51,3 +77,9 @@ bailian:
   baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
   model: "qwen3.5-omni-plus-2026-03-15"
   timeoutMs: 60000
+
+jobdata:
+  ai:
+    embedding:
+      # 启动时做一次 embedding 维度校验（避免写入/检索时才报错）；无 Ollama 环境可设为 false
+      validate-on-startup: true

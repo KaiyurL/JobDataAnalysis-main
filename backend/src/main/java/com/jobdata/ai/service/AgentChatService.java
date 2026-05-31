@@ -557,10 +557,18 @@ public class AgentChatService {
 
         String enrichedQuery = enrichQuery(query, profile);
         Set<String> preferCities = extractCities(profile);
+        String preferExperience = profile == null ? "" : asString(profile.get("experience"), "");
 
         try {
-            SearchRequest req = SearchRequest.builder().query(enrichedQuery).topK(20).build();
-            List<Document> docs = vectorStore.similaritySearch(req);
+            SearchRequest.Builder reqBuilder = SearchRequest.builder().query(enrichedQuery).topK(20);
+            String filter = buildMetadataFilterExpression(preferCities, preferExperience);
+            if (!filter.isEmpty()) {
+                reqBuilder.filterExpression(filter);
+            }
+            List<Document> docs = vectorStore.similaritySearch(reqBuilder.build());
+            if (docs.isEmpty() && !filter.isEmpty()) {
+                docs = vectorStore.similaritySearch(SearchRequest.builder().query(enrichedQuery).topK(20).build());
+            }
             List<Map<String, Object>> raw = new ArrayList<>();
             for (Document d : docs) {
                 Map<String, Object> meta = d.getMetadata() == null ? Map.of() : d.getMetadata();
@@ -674,6 +682,80 @@ public class AgentChatService {
         } catch (Exception e) {
             return List.of();
         }
+    }
+
+    private String buildMetadataFilterExpression(Set<String> preferCities, String preferExperience) {
+        String cityExpr = buildCityFilterExpression(preferCities);
+        String expExpr = buildExperienceFilterExpression(preferExperience);
+        if (cityExpr.isEmpty()) return expExpr;
+        if (expExpr.isEmpty()) return cityExpr;
+        return "(" + cityExpr + ") && (" + expExpr + ")";
+    }
+
+    private String buildCityFilterExpression(Set<String> preferCities) {
+        if (preferCities == null || preferCities.isEmpty()) return "";
+        Set<String> variants = new LinkedHashSet<>();
+        for (String c : preferCities) {
+            if (c == null) continue;
+            String t = c.trim();
+            if (t.isEmpty()) continue;
+            variants.add(t);
+            if (t.endsWith("市") && t.length() > 1) {
+                variants.add(t.substring(0, t.length() - 1));
+            } else {
+                variants.add(t + "市");
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String v : variants) {
+            if (sb.length() > 0) sb.append(" || ");
+            sb.append("city == '").append(escapeFilterText(v)).append("'");
+        }
+        return sb.toString();
+    }
+
+    private String buildExperienceFilterExpression(String preferExperience) {
+        String exp = preferExperience == null ? "" : preferExperience.trim();
+        if (exp.isEmpty() || exp.contains("不限") || exp.contains("经验不限")) {
+            return "";
+        }
+
+        Set<String> tokens = new LinkedHashSet<>();
+        if (exp.contains("应届") || exp.contains("在校") || exp.contains("校招") || exp.contains("实习") || exp.contains("毕业")) {
+            tokens.add("应届");
+            tokens.add("应届生");
+            tokens.add("在校");
+            tokens.add("在校生");
+            tokens.add("校招");
+            tokens.add("实习");
+            tokens.add("经验不限");
+            tokens.add("不限");
+            tokens.add("无经验");
+            tokens.add("1年以内");
+            tokens.add("1年以下");
+            tokens.add("0-1年");
+        } else {
+            tokens.add(exp);
+        }
+
+        if (tokens.isEmpty()) return "";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("experience in [");
+        boolean first = true;
+        for (String t : tokens) {
+            if (t == null || t.trim().isEmpty()) continue;
+            if (!first) sb.append(", ");
+            sb.append("'").append(escapeFilterText(t.trim())).append("'");
+            first = false;
+        }
+        sb.append("]");
+        return first ? "" : sb.toString();
+    }
+
+    private String escapeFilterText(String s) {
+        if (s == null) return "";
+        return s.replace("'", "\\'");
     }
 
     private String enrichQuery(String query, Map<String, Object> profile) {

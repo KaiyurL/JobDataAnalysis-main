@@ -47,13 +47,15 @@
       :pipeline-status-text="pipelineStatusText"
       :pipeline-summary="pipelineSummary"
       :pipeline-errors="pipelineErrors"
-      :pipeline-image-urls="pipelineImageUrls"
+      :pipeline-cluster-svg="pipelineClusterSvg"
       :pipeline-progress="pipelineProgress"
+      :pipeline-eta-text="pipelineEtaText"
       :colors="colors"
       :job-skill-heatmap-ready="jobSkillHeatmapReady"
       :skill-timeline-ready="skillTimelineReady"
       :company-size-salary-ready="companySizeSalaryReady"
       :edu-exp-salary-bubble-ready="eduExpSalaryBubbleReady"
+      :edu-exp-salary-bubble-stats-text="eduExpSalaryBubbleStatsText"
       :job-skill-heatmap-ref="setJobSkillHeatmapRef"
       :skill-timeline-ref="setSkillTimelineRef"
       :company-size-salary-ref="setCompanySizeSalaryRef"
@@ -113,12 +115,14 @@ const {
   pipelineStatus,
   pipelineSummary,
   pipelineErrors,
-  pipelineImageUrls,
+  pipelineClusterSvg,
   pipelineProgress,
+  pipelineEtaText,
   jobSkillHeatmapReady,
   skillTimelineReady,
   companySizeSalaryReady,
   eduExpSalaryBubbleReady,
+  eduExpSalaryBubbleStatsText,
   deepChartOptions,
   selectedDeepChart,
   jobSkillHeatmapRef,

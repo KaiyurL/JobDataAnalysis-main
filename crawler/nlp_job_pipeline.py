@@ -279,7 +279,7 @@ def main():
 
         edu_exp_dir = os.path.join(run_dir, "stats")
         try:
-            base_artifacts["artifacts"].update(export_edu_exp_salary_bubble(with_tokens, edu_exp_dir, min_count=5))
+            base_artifacts["artifacts"].update(export_edu_exp_salary_bubble(with_tokens, edu_exp_dir, min_count=1))
         except Exception as e:
             base_artifacts.setdefault("errors", []).append("edu_exp_salary_bubble 失败: " + str(e))
 
