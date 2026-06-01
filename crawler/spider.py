@@ -36,20 +36,22 @@ def scrape_jobs(platform_override=None, browser_override=None):
 
     参数：
     - platform_override: 覆盖配置中的 platform（boss/51job/both）
-    - browser_override: 覆盖配置中的 browser（auto/edge/chrome）
+    - browser_override: 覆盖配置中的 browser（edge/chrome）
     """
     config = load_config()
     platform = str(platform_override or config.get("platform", "boss")).strip().lower()
-    browser = str(browser_override or config.get("browser", "auto")).strip().lower()
+    browser = str(browser_override or config.get("browser", "edge")).strip().lower()
     if sys.stdin.isatty() and not platform_override:
         selected = input(f"请选择数据源(boss/51job/both) [默认 {platform}]: ").strip().lower()
         if selected in ("boss", "51job", "both"):
             platform = selected
 
-    if sys.stdin.isatty() and not browser_override:
-        selected_browser = input(f"请选择浏览器(auto/edge/chrome) [默认 {browser}]: ").strip().lower()
-        if selected_browser in ("auto", "edge", "chrome"):
-            browser = selected_browser
+    if browser == "auto":
+        print("已移除自动选择浏览器(auto)逻辑，请在配置或参数中显式指定 edge 或 chrome。")
+        return
+    if browser not in ("edge", "chrome"):
+        print(f"浏览器配置不合法: {browser}，请使用 edge 或 chrome。")
+        return
 
     KEYWORDS = config.get("keywords", ["Java", "Python", "前端", "数据分析", "产品经理"])
     CITIES = config.get("cities", ["北京", "上海", "广州", "深圳", "杭州"])
@@ -153,6 +155,6 @@ def scrape_jobs(platform_override=None, browser_override=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--platform", choices=["boss", "51job", "both"])
-    parser.add_argument("--browser", choices=["auto", "edge", "chrome"])
+    parser.add_argument("--browser", choices=["edge", "chrome"])
     args = parser.parse_args()
     scrape_jobs(platform_override=args.platform, browser_override=args.browser)

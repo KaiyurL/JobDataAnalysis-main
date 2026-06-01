@@ -85,36 +85,34 @@ JobDataAnalysis/
 - 支持环境变量：`DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD`
 
 
-Docker 快速启动（PostgreSQL 15 + pgvector）：
+
+**Docker 快速启动（PostgreSQL 15 + pgvector）：
 
 ```bash
-docker run --name jobdata-pg `
-  -e POSTGRES_PASSWORD=123456ppoo `
-  -e POSTGRES_DB=job_data `
-  -p 5432:5432 `
-  -d pgvector/pgvector:pg15
+docker run --name jobdata-pg -e POSTGRES_PASSWORD=123456ppoo -e POSTGRES_DB=job_data -p 5432:5432 -d pgvector/pgvector:pg15
 ```
-## 进库开启 pgvector 扩展（第一次建议做）
+
+#### 进库开启 pgvector 扩展（第一次建议做）
 ```bash
-docker exec -it jobdata-pg psql -U postgres -d job_data -c "CREATE 
-EXTENSION IF NOT EXISTS vector;"
+docker exec -it jobdata-pg psql -U postgres -d job_data -c "CREATE EXTENSION IF NOT EXISTS vector;"
 ```
-## 把 sql 喂给容器里的 psql（推荐）
-在 PowerShell 里执行（把路径换成你的 job_data.sql 实际路径）：
+
+#### 导入表结构（推荐：先复制到容器再执行，不依赖命令行重定向）
 
 ```bash
-docker exec -i jobdata-pg psql -U postgres -d job_data < 
-"backend\src\main\resources\db\job_data_structure.sql"
+docker cp backend/src/main/resources/db/job_data_structure.sql jobdata-pg:/tmp/job_data_structure.sql
+docker exec -it jobdata-pg psql -U postgres -d job_data -f /tmp/job_data_structure.sql
 ```
 导入完成后可以简单验证一下有没有表：
 
 ```bash
-docker exec -it jobdata-pg psql -U postgres -d job_data -c "\dt"
+docker exec -it jobdata-pg psql -U postgres -d job_data -c "\dt"
 ```
 或本地安装 PostgreSQL 15+，需要安装 pgvector 扩展（自行搜索安装）。
 
 后端默认使用 `job_data` 数据库，若不存在请创建。
 需要的数据库表结构在 `backend/src/main/resources/db/job_data_structure.sql` 中。
+如需导入完整数据（`job_data.dump`/`job_data.sql`），参考 [导入指南.md](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/导入指南.md)。
 
 
 ### 需要修改的配置（重要）
@@ -125,7 +123,7 @@ docker exec -it jobdata-pg psql -U postgres -d job_data -c "\dt"
 
 2) 爬虫/NLP 数据库与浏览器配置（Python）
 - 文件：`crawler/runtime_config.json`
-- 需要确认/修改：
+** - 需要确认/修改：
   - `db`（host/port/user/password/database/charset）
   - `browser`（edge_candidates / chrome_candidates 等浏览器路径）
 
@@ -139,16 +137,17 @@ docker exec -it jobdata-pg psql -U postgres -d job_data -c "\dt"
   - `city_codes_51job`（前程无忧城市编码映射）
   - `delay_min` / `delay_max`（请求间隔，建议保守一点避免风控）
   - `browser`: `auto` / `edge` / `chrome`（选择启动浏览器）
-  - 浏览器路径（Windows）：在 `crawler/runtime_config.json` 的 `browser.edge_candidates` / `browser.chrome_candidates` 中配置
+  ** - 浏览器路径（Windows）：在 `crawler/runtime_config.json` 的 `browser.edge_candidates` / `browser.chrome_candidates` 中配置
 
 4) AI 智能求职助手（支持 OpenAI 兼容模式 + Ollama Embedding 可切换）
 - 必需环境变量：
-  - `AI_DASHSCOPE_API_KEY` （百炼平台 API Key）
+  - `AI_DASHSCOPE_API_KEY` （百炼平台 API Key）或直接在backend\src\main\resources\application.yml文件中配置
+  ** apiKey: ${AI_DASHSCOPE_API_KEY:你的API Key}  有两处位置
 - 可选环境变量：
   - `AI_BASE_URL`（默认 `https://dashscope.aliyuncs.com/compatible-mode`）
   - `AI_OLLAMA_BASE_URL`（默认 `http://localhost:11434`）
 
-Embedding / 模型如何切换：
+** Embedding / 模型如何切换：
 - 直接修改后端配置文件：`backend/src/main/resources/application.yml`
   - `spring.ai.model.chat` 固定为 `openai`（用于 DashScope compatible-mode 聊天），模型是百炼 `qwen3.5-omni-plus-2026-03-15`
   - `spring.ai.model.embedding` 在 `ollama` / `openai` 间切换（RAG 向量化用哪个 embedding）
@@ -166,8 +165,9 @@ Embedding / 模型如何切换：
   - `spring.ai.vectorstore.pgvector.dimensions`（例如 `1024`，需与 embedding 输出维度一致）
 
 5) 后端触发爬虫的 Python 解释器
-- 若由后端触发爬虫，建议设置环境变量：
+** - 若由后端触发爬虫，建议设置环境变量：
   - `JOBDATA_PYTHON`：指向已安装依赖的 `python.exe`（避免系统 python 缺 pip/依赖）
+  -  爬虫需要的依赖 pip install -r requirements.txt
 
 ### 2. 后端启动
 
@@ -217,7 +217,6 @@ python spider.py --platform both
 ![alt text](<images/屏幕截图 2026-05-31 190324.png>) 
 ![alt text](<images/屏幕截图 2026-05-31 190333.png>) 
 ![alt text](<images/屏幕截图 2026-05-31 190346.png>)
-
 
 
 
