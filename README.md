@@ -84,7 +84,6 @@ JobDataAnalysis/
 - `backend/src/main/resources/application.yml`
 - 支持环境变量：`DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD`
 
-数据库表与向量库结构由 Flyway 迁移脚本管理（`backend/src/main/resources/db/migration`）。
 
 Docker 快速启动（PostgreSQL 15 + pgvector）：
 
@@ -95,6 +94,11 @@ docker run --name jobdata-pg \
   -p 5432:5432 \
   -d pgvector/pgvector:pg15
 ```
+或本地安装 PostgreSQL 15+，需要安装 pgvector 扩展（自行搜索安装）。
+
+后端默认使用 `job_data` 数据库，若不存在请创建。
+需要的数据库表结构在 `backend/src/main/resources/db/job_data_structure.sql` 中。
+
 
 ### 需要修改的配置（重要）
 
@@ -122,7 +126,7 @@ docker run --name jobdata-pg \
 
 4) AI 智能求职助手（支持 OpenAI 兼容模式 + Ollama Embedding 可切换）
 - 必需环境变量：
-  - `AI_DASHSCOPE_API_KEY`
+  - `AI_DASHSCOPE_API_KEY` （百炼平台 API Key）
 - 可选环境变量：
   - `AI_BASE_URL`（默认 `https://dashscope.aliyuncs.com/compatible-mode`）
   - `AI_OLLAMA_BASE_URL`（默认 `http://localhost:11434`）
