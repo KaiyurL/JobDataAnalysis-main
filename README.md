@@ -88,10 +88,10 @@ JobDataAnalysis/
 Docker 快速启动（PostgreSQL 15 + pgvector）：
 
 ```bash
-docker run --name jobdata-pg \
-  -e POSTGRES_PASSWORD=123456ppoo \
-  -e POSTGRES_DB=job_data \
-  -p 5432:5432 \
+docker run --name jobdata-pg `
+  -e POSTGRES_PASSWORD=123456ppoo `
+  -e POSTGRES_DB=job_data `
+  -p 5432:5432 `
   -d pgvector/pgvector:pg15
 ```
 ## 进库开启 pgvector 扩展（第一次建议做）
