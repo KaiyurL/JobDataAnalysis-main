@@ -700,8 +700,8 @@ export function useDashboardDeepAnalysis(deps) {
   const startPipeline = async (force = false) => {
     pipelineRunning.value = true
     pipelineProgress.value = 0
-    pipelineEstimatedEndMs.value = 0
-    pipelineEstimatedTotalSeconds.value = 0
+    pipelineEstimatedTotalSeconds.value = 120
+    pipelineEstimatedEndMs.value = Date.now() + pipelineEstimatedTotalSeconds.value * 1000
     pipelineStatus.value = 'running'
     revokePipelineUrls()
     if (pipelinePollTimer.value) clearInterval(pipelinePollTimer.value)
@@ -719,8 +719,8 @@ export function useDashboardDeepAnalysis(deps) {
 
       try {
         const s0 = await pipelineApi.getPipelineStatusData()
-        if (s0?.estimatedEndMs && !pipelineEstimatedEndMs.value) pipelineEstimatedEndMs.value = Number(s0.estimatedEndMs)
-        if (s0?.estimatedTotalSeconds && !pipelineEstimatedTotalSeconds.value) pipelineEstimatedTotalSeconds.value = Number(s0.estimatedTotalSeconds)
+        if (s0?.estimatedEndMs) pipelineEstimatedEndMs.value = Number(s0.estimatedEndMs)
+        if (s0?.estimatedTotalSeconds) pipelineEstimatedTotalSeconds.value = Number(s0.estimatedTotalSeconds)
       } catch {
       }
 
@@ -728,8 +728,8 @@ export function useDashboardDeepAnalysis(deps) {
         const s = await pipelineApi.getPipelineStatusData()
         pipelineStatus.value = s.status
         pipelineMessage.value = s.message
-        if (s?.estimatedEndMs && !pipelineEstimatedEndMs.value) pipelineEstimatedEndMs.value = Number(s.estimatedEndMs)
-        if (s?.estimatedTotalSeconds && !pipelineEstimatedTotalSeconds.value) pipelineEstimatedTotalSeconds.value = Number(s.estimatedTotalSeconds)
+        if (s?.estimatedEndMs) pipelineEstimatedEndMs.value = Number(s.estimatedEndMs)
+        if (s?.estimatedTotalSeconds) pipelineEstimatedTotalSeconds.value = Number(s.estimatedTotalSeconds)
         pipelineProgress.value = Math.min(95, pipelineProgress.value + 5)
         if (s.status !== 'running') {
           pipelineRunning.value = false

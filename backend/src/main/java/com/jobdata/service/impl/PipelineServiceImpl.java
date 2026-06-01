@@ -33,6 +33,8 @@ import java.util.stream.Collectors;
  */
 @Service
 public class PipelineServiceImpl implements PipelineService {
+    private static final long DEFAULT_DASHBOARD_ESTIMATE_SECONDS = 120;
+    private static final long DEFAULT_STATS_ESTIMATE_SECONDS = 30;
 
     private static final String PYTHON_CMD = "python";
     private static final int MAX_LOG_LINES = 500;
@@ -291,6 +293,9 @@ public class PipelineServiceImpl implements PipelineService {
                 estimate = lastDashboardDurationSeconds;
             } else if ("stats".equals(currentKind)) {
                 estimate = lastStatsDurationSeconds;
+            }
+            if (estimate == null) {
+                estimate = "stats".equals(currentKind) ? DEFAULT_STATS_ESTIMATE_SECONDS : DEFAULT_DASHBOARD_ESTIMATE_SECONDS;
             }
         }
         result.put("estimatedTotalSeconds", estimate);

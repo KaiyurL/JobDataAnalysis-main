@@ -436,6 +436,19 @@ if (typeof window !== 'undefined') {
   width: 100%;
   height: 100%;
 }
+.cluster-visual .empty-placeholder {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+}
+.percentage-value,
+.percentage-label {
+  display: block;
+  text-align: center;
+}
 .bubble-box {
   height: 100%;
   display: flex;

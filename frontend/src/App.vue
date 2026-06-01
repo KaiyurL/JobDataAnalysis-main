@@ -50,11 +50,11 @@
     <main class="jd-main">
       <div class="u-container">
         <router-view v-slot="{ Component, route: r }">
-          <keep-alive include="Dashboard">
-            <component :is="Component" v-if="r.meta.keepAlive" />
+          <keep-alive v-if="r.meta.keepAlive" :max="4">
+            <component :is="Component" :key="r.fullPath" />
           </keep-alive>
-          <transition name="jd-fade" mode="out-in">
-            <component :is="Component" v-if="!r.meta.keepAlive" />
+          <transition v-else name="jd-fade" mode="out-in">
+            <component :is="Component" :key="r.fullPath" />
           </transition>
         </router-view>
       </div>
@@ -149,7 +149,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
+import { ref, computed, onMounted, onUnmounted, provide, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { SwitchButton, ArrowDown, Star, StarFilled, Clock, TopRight } from '@element-plus/icons-vue'
@@ -170,9 +170,14 @@ const currentRootPath = computed(() => {
   return path
 })
 
-const userInfo = computed(() => {
-  return getUserInfo()
-})
+const userInfo = ref(getUserInfo())
+watch(
+  () => route.fullPath,
+  () => {
+    userInfo.value = getUserInfo()
+  },
+  { immediate: true }
+)
 
 const visibleMenuItems = computed(() => {
   const role = String(userInfo.value?.role || 'user').toLowerCase()

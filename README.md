@@ -91,8 +91,15 @@ JobDataAnalysis/
 ```bash
 docker run --name jobdata-pg -e POSTGRES_PASSWORD=123456ppoo -e POSTGRES_DB=job_data -p 5432:5432 -d pgvector/pgvector:pg15
 ```
+如需导入数据（`job_data.dump`/`job_data.sql`）没有数据则跳过往下看‘进库开启 pgvector 扩展’，参考 [导入指南.md](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/导入指南.md)或直接执行下面命令：
+docker cp ".\pgdata\job_data.sql" jobdata-pg:/tmp/job_data.sql
+docker exec -it jobdata-pg psql -U postgres -c "DROP DATABASE IF EXISTS job_data;"
+docker exec -it jobdata-pg psql -U postgres -c "CREATE DATABASE job_data;"
+docker exec -i jobdata-pg psql -U postgres -d job_data -f /tmp/job_data.sql
+docker exec -it jobdata-pg psql -U postgres -d job_data -c "CREATE EXTENSION IF NOT EXISTS vector;"
+docker exec -it jobdata-pg psql -U postgres -d job_data -c "\dt"
 
-#### 进库开启 pgvector 扩展（第一次建议做）
+#### 进库开启 pgvector 扩展（第一次建议做），上面的命令运行完则不用执行下面的命令
 ```bash
 docker exec -it jobdata-pg psql -U postgres -d job_data -c "CREATE EXTENSION IF NOT EXISTS vector;"
 ```
@@ -112,7 +119,7 @@ docker exec -it jobdata-pg psql -U postgres -d job_data -c "\dt"
 
 后端默认使用 `job_data` 数据库，若不存在请创建。
 需要的数据库表结构在 `backend/src/main/resources/db/job_data_structure.sql` 中。
-如需导入完整数据（`job_data.dump`/`job_data.sql`），参考 [导入指南.md](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/导入指南.md)。
+
 
 
 ### 需要修改的配置（重要）

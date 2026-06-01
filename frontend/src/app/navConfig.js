@@ -30,7 +30,7 @@ export const NAV_ITEMS = [
     title: '岗位分析',
     icon: Briefcase,
     requiresAuth: true,
-    keepAlive: false,
+    keepAlive: true,
     roles: []
   },
   {
@@ -38,7 +38,7 @@ export const NAV_ITEMS = [
     title: '智能助手',
     icon: User,
     requiresAuth: true,
-    keepAlive: false,
+    keepAlive: true,
     roles: []
   },
   {
@@ -46,7 +46,7 @@ export const NAV_ITEMS = [
     title: '系统设置',
     icon: Setting,
     requiresAuth: true,
-    keepAlive: false,
+    keepAlive: true,
     roles: ['admin']
   }
 ]
