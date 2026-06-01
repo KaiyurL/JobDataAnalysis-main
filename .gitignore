@@ -64,8 +64,6 @@ dist-ssr/
 *.local
 
 # Database
-*.sql
-*.db
 *.sqlite
 
 # Data/Models (ignored)
