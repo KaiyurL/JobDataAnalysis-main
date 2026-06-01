@@ -94,6 +94,23 @@ docker run --name jobdata-pg \
   -p 5432:5432 \
   -d pgvector/pgvector:pg15
 ```
+## 进库开启 pgvector 扩展（第一次建议做）
+```bash
+docker exec -it jobdata-pg psql -U postgres -d job_data -c "CREATE 
+EXTENSION IF NOT EXISTS vector;"
+```
+## 把 sql 喂给容器里的 psql（推荐）
+在 PowerShell 里执行（把路径换成你的 job_data.sql 实际路径）：
+
+```bash
+docker exec -i jobdata-pg psql -U postgres -d job_data < 
+"backend\src\main\resources\db\job_data_structure.sql"
+```
+导入完成后可以简单验证一下有没有表：
+
+```bash
+docker exec -it jobdata-pg psql -U postgres -d job_data -c "\dt"
+```
 或本地安装 PostgreSQL 15+，需要安装 pgvector 扩展（自行搜索安装）。
 
 后端默认使用 `job_data` 数据库，若不存在请创建。
