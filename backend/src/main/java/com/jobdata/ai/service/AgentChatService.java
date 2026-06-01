@@ -5,8 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobdata.ai.context.UserContextHolder;
 import com.jobdata.ai.model.AgentChatResponse;
 import com.jobdata.ai.model.AgentStreamEvent;
-import com.jobdata.ai.tools.JobTools;
-import com.jobdata.ai.tools.JobToolResultStore;
 import com.jobdata.ai.tools.UserTools;
 import com.jobdata.dto.AiChatRequest;
 import com.jobdata.entity.JobInfo;
@@ -20,10 +18,13 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -39,22 +40,21 @@ public class AgentChatService {
     private static final Pattern CODE_FENCE = Pattern.compile("(?s)```(?:json)?\\s*(.*?)\\s*```");
     private static final Pattern MISSING_VALUE_COMMA = Pattern.compile(":\\s*,");
     private static final Pattern MISSING_VALUE_END_OBJ = Pattern.compile(":\\s*}");
+    private static final int CANDIDATE_TOPK_MAX = 50;
+    private static final Duration STREAM_HEARTBEAT_INTERVAL = Duration.ofSeconds(15);
+    private static final Duration STREAM_IDLE_TIMEOUT = Duration.ofMinutes(15);
 
     private final ChatClient chatClient;
     private final VectorStore vectorStore;
-    private final JobTools jobTools;
     private final UserTools userTools;
-    private final JobToolResultStore jobToolResultStore;
     private final JobInfoService jobInfoService;
     private final JobInfo51JobService jobInfo51JobService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public AgentChatService(ChatClient.Builder builder, VectorStore vectorStore, JobTools jobTools, UserTools userTools, JobToolResultStore jobToolResultStore, JobInfoService jobInfoService, JobInfo51JobService jobInfo51JobService) {
+    public AgentChatService(ChatClient.Builder builder, VectorStore vectorStore, UserTools userTools, JobInfoService jobInfoService, JobInfo51JobService jobInfo51JobService) {
         this.chatClient = builder.build();
         this.vectorStore = vectorStore;
-        this.jobTools = jobTools;
         this.userTools = userTools;
-        this.jobToolResultStore = jobToolResultStore;
         this.jobInfoService = jobInfoService;
         this.jobInfo51JobService = jobInfo51JobService;
     }
@@ -119,34 +119,67 @@ public class AgentChatService {
      * @return 流式事件序列
      */
     public Flux<ServerSentEvent<AgentStreamEvent>> chatStream(AiChatRequest request, Long userId) {
-        AgentChatResponse full = chatOnce(request, userId);
-        String text = full.getReply() == null ? "" : full.getReply();
-
         Flux<ServerSentEvent<AgentStreamEvent>> start = Flux.just(ServerSentEvent.builder(new AgentStreamEvent("start", "")).build());
-        Flux<ServerSentEvent<AgentStreamEvent>> tokens = Flux.fromIterable(splitForStream(text, 32))
-                .delayElements(Duration.ofMillis(25))
-                .map(t -> ServerSentEvent.builder(new AgentStreamEvent("delta", t)).build());
 
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("jobCards", full.getJobCards());
-        Flux<ServerSentEvent<AgentStreamEvent>> end = Flux.just(ServerSentEvent.builder(new AgentStreamEvent("end", "", payload)).build());
+        Mono<PreparedStream> preparedMono = Mono.fromCallable(() -> prepareStream(request, userId))
+                .subscribeOn(Schedulers.boundedElastic())
+                .cache();
 
-        return start.concatWith(tokens).concatWith(end).timeout(Duration.ofSeconds(180));
+        Flux<ServerSentEvent<AgentStreamEvent>> heartbeats = Flux.interval(STREAM_HEARTBEAT_INTERVAL)
+                .map(i -> ServerSentEvent.<AgentStreamEvent>builder().comment("keep-alive").build())
+                .takeUntilOther(preparedMono);
+
+        Flux<ServerSentEvent<AgentStreamEvent>> reply = preparedMono
+                .flatMapMany(prepared -> {
+                    Flux<ServerSentEvent<AgentStreamEvent>> tokens = chatClient.prompt()
+                            .system(prepared.system())
+                            .user(prepared.user())
+                            .stream()
+                            .content()
+                            .filter(t -> t != null && !t.isEmpty())
+                            .map(t -> ServerSentEvent.builder(new AgentStreamEvent("delta", t)).build());
+
+                    return tokens.concatWithValues(ServerSentEvent.builder(new AgentStreamEvent("end", "", payloadWithJobCards(prepared.jobCards()))).build())
+                            .onErrorResume(e -> Flux.just(ServerSentEvent.builder(new AgentStreamEvent("end", "", payloadWithError(prepared.jobCards()))).build()));
+                })
+                .onErrorResume(e -> Flux.just(ServerSentEvent.builder(new AgentStreamEvent("end", "", payloadWithError(List.of()))).build()));
+
+        return start.concatWith(heartbeats).concatWith(reply).timeout(STREAM_IDLE_TIMEOUT);
     }
 
-    /**
-     * 将文本分割为多个小片段用于流式传输
-     */
-    private List<String> splitForStream(String s, int chunkSize) {
-        if (s == null || s.isEmpty()) {
-            return List.of();
+    private record PreparedStream(String system, String user, List<Map<String, Object>> jobCards) {
+    }
+
+    private PreparedStream prepareStream(AiChatRequest request, Long userId) {
+        Long prevUserId = UserContextHolder.getUserId();
+        UserContextHolder.setUserId(userId);
+        try {
+            String userMessage = buildUserMessage(request);
+            Map<String, Object> effProfile = getEffectiveProfile(request, userId);
+            List<Map<String, Object>> citations = buildCitations(userMessage, effProfile);
+            List<Map<String, Object>> candidates = fetchCandidates(userMessage, effProfile);
+            List<Map<String, Object>> recommended = selectRecommendations(userMessage, effProfile, citations, candidates, 8);
+            FinalReplyPrompt prompt = buildFinalReplyPrompt(userMessage, effProfile, citations, recommended);
+            return new PreparedStream(prompt.system(), prompt.user(), recommended);
+        } finally {
+            if (prevUserId == null) {
+                UserContextHolder.clear();
+            } else {
+                UserContextHolder.setUserId(prevUserId);
+            }
         }
-        int size = Math.max(1, chunkSize);
-        List<String> out = new ArrayList<>();
-        for (int i = 0; i < s.length(); i += size) {
-            out.add(s.substring(i, Math.min(s.length(), i + size)));
-        }
-        return out;
+    }
+
+    private Map<String, Object> payloadWithJobCards(List<Map<String, Object>> jobCards) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("jobCards", jobCards == null ? List.of() : jobCards);
+        return payload;
+    }
+
+    private Map<String, Object> payloadWithError(List<Map<String, Object>> jobCards) {
+        Map<String, Object> payload = payloadWithJobCards(jobCards);
+        payload.put("error", "internal_error");
+        return payload;
     }
 
     /**
@@ -154,8 +187,8 @@ public class AgentChatService {
      */
     private String buildSystemPrompt(AiChatRequest request, Long userId, String query) {
         StringBuilder sb = new StringBuilder();
-        sb.append("你是一个招聘数据分析系统内置的智能体，负责基于真实数据库岗位与用户画像、收藏岗位、浏览历史给出建议。");
-        sb.append("要求：中文输出；结构清晰；不编造岗位；当需要岗位数据时应调用工具 job_search；当需要用户数据时应调用 user_* 工具。");
+        sb.append("你是一个招聘数据分析系统内置的智能体，负责基于真实岗位数据与用户画像、收藏岗位、浏览历史给出建议。");
+        sb.append("要求：中文输出；结构清晰；不编造岗位；当需要岗位数据时应调用岗位检索工具；当需要用户数据时应调用 user_* 工具。");
         sb.append("\n\n【工具调用约束】");
         sb.append("\n- 工具参数必须是严格合法的 JSON。");
         sb.append("\n- 不允许出现空值占位（例如 \"maxSalaryK\": , 这种是非法 JSON）。");
@@ -169,7 +202,7 @@ public class AgentChatService {
         sb.append("\n- 用户问“我最近看过什么/基于浏览历史推荐”时：先调用 user_list_job_history（如系统未提供浏览摘要）。");
         sb.append("\n- 仅当用户明确要求“保存/更新画像”时才调用 user_upsert_profile。");
         sb.append("\n\n【可用工具】");
-        sb.append("\n- job_search：按条件从数据库检索岗位。");
+        sb.append("\n- 岗位检索工具：按条件检索岗位。");
         sb.append("\n- user_get_profile：读取当前用户画像。");
         sb.append("\n- user_list_favorites：读取收藏。");
         sb.append("\n- user_list_job_history：读取浏览历史。");
@@ -326,86 +359,6 @@ public class AgentChatService {
     }
 
     /**
-     * 判断异常是否为工具参数 JSON 解析错误
-     */
-    private boolean isToolArgumentsJsonError(Throwable e) {
-        Throwable cur = e;
-        while (cur != null) {
-            String msg = cur.getMessage();
-            if (msg != null) {
-                if (msg.contains("Conversion from JSON") || msg.contains("JsonParseException") || msg.contains("Unexpected character")) {
-                    return true;
-                }
-            }
-            cur = cur.getCause();
-        }
-        return false;
-    }
-
-    /**
-     * 当工具调用失败时，手动执行岗位检索并生成回复
-     */
-    private AgentChatResponse fallbackManualJobSearch(AiChatRequest request, Long userId, String userMessage, String system) {
-        String extractSystem = system
-                + "\n\n现在工具调用发生了参数 JSON 解析错误。"
-                + "请你改为输出一个“岗位检索参数 JSON”，要求只输出一个 JSON Object，不要任何解释文字，不要代码块。"
-                + "字段：source, keyword, city, education, experience, minSalaryK, maxSalaryK, company, limit。"
-                + "不确定就省略字段或写 null。";
-
-        String argsJson = "";
-        try {
-            argsJson = chatClient.prompt().system(extractSystem).user(userMessage).call().content();
-        } catch (Exception ignored) {
-        }
-
-        Map<String, Object> args = parseArgsJsonLenient(argsJson);
-        String source = asString(args.get("source"), "all");
-        String keyword = asString(args.get("keyword"), "");
-        String city = asString(args.get("city"), "");
-        String education = asString(args.get("education"), "");
-        String experience = asString(args.get("experience"), "");
-        Integer minSalaryK = asInteger(args.get("minSalaryK"));
-        Integer maxSalaryK = asInteger(args.get("maxSalaryK"));
-        String company = asString(args.get("company"), "");
-        Integer limit = asInteger(args.get("limit"));
-
-        List<Map<String, Object>> jobs = jobTools.jobSearch(source, keyword, city, education, experience, minSalaryK, maxSalaryK, company, limit);
-
-        StringBuilder candidates = new StringBuilder();
-        int shown = Math.min(10, jobs == null ? 0 : jobs.size());
-        for (int i = 0; i < shown; i++) {
-            Map<String, Object> j = jobs.get(i);
-            candidates.append(i + 1).append(". ")
-                    .append(String.valueOf(j.getOrDefault("jobName", ""))).append(" - ")
-                    .append(String.valueOf(j.getOrDefault("companyName", ""))).append("（")
-                    .append(String.valueOf(j.getOrDefault("city", ""))).append("）")
-                    .append(" 薪资: ")
-                    .append(String.valueOf(j.getOrDefault("salaryMin", ""))).append("-")
-                    .append(String.valueOf(j.getOrDefault("salaryMax", ""))).append("K")
-                    .append(" 来源: ").append(String.valueOf(j.getOrDefault("source", "")))
-                    .append("\n");
-        }
-
-        String finalSystem = system + "\n\n注意：本轮禁止再调用任何工具。请仅基于候选岗位与参考资料回答。";
-        String finalUser = userMessage
-                + "\n\n候选岗位（来自数据库检索）：\n"
-                + (candidates.length() == 0 ? "(无结果)" : candidates.toString())
-                + "\n请给出推荐与筛选建议。";
-
-        String finalReply = "";
-        try {
-            finalReply = chatClient.prompt().system(finalSystem).user(finalUser).call().content();
-        } catch (Exception e) {
-            finalReply = "本次岗位检索已完成，但生成建议时发生异常。你可以换一种表述，或减少筛选条件重试。";
-        }
-
-        AgentChatResponse out = new AgentChatResponse();
-        out.setReply(finalReply == null ? "" : finalReply);
-        out.setJobCards(jobToolResultStore.consumeLastJobCards());
-        return out;
-    }
-
-    /**
      * 宽松解析 JSON 参数，容忍常见格式错误
      */
     private Map<String, Object> parseArgsJsonLenient(String raw) {
@@ -482,6 +435,33 @@ public class AgentChatService {
         }
     }
 
+    private Object metaFirst(Map<String, Object> meta, String... keys) {
+        if (meta == null || meta.isEmpty() || keys == null || keys.length == 0) {
+            return null;
+        }
+        for (String k : keys) {
+            if (k == null || k.isBlank()) {
+                continue;
+            }
+            if (meta.containsKey(k)) {
+                Object v = meta.get(k);
+                if (v != null) {
+                    return v;
+                }
+            }
+        }
+        return null;
+    }
+
+    private String metaString(Map<String, Object> meta, String def, String... keys) {
+        Object v = metaFirst(meta, keys);
+        if (v == null) {
+            return def;
+        }
+        String s = String.valueOf(v).trim();
+        return s.isEmpty() ? def : s;
+    }
+
     private boolean isBlank(Object v) {
         return v == null || String.valueOf(v).trim().isEmpty();
     }
@@ -527,26 +507,42 @@ public class AgentChatService {
             for (Document d : docs) {
                 Map<String, Object> meta = d.getMetadata() == null ? Map.of() : d.getMetadata();
                 Map<String, Object> c = new HashMap<>();
-                c.put("title", meta.getOrDefault("title", meta.getOrDefault("job_name", "参考片段")));
-                c.put("source", meta.getOrDefault("source", meta.getOrDefault("source_table", "")));
-                c.put("source_table", meta.getOrDefault("source_table", null));
-                c.put("job_id", meta.getOrDefault("job_id", meta.getOrDefault("id", null)));
-                c.put("job_url", meta.getOrDefault("job_url", null));
-                c.put("job_name", meta.getOrDefault("job_name", null));
-                c.put("company_name", meta.getOrDefault("company_name", null));
-                c.put("city", meta.getOrDefault("city", null));
-                c.put("experience", meta.getOrDefault("experience", null));
-                c.put("education", meta.getOrDefault("education", null));
-                c.put("company_industry", meta.getOrDefault("company_industry", null));
-                c.put("company_size", meta.getOrDefault("company_size", null));
-                c.put("company_welfare", meta.getOrDefault("company_welfare", null));
-                c.put("publish_date", meta.getOrDefault("publish_date", null));
-                c.put("job_keywords", meta.getOrDefault("job_keywords", null));
-                c.put("job_desc", meta.getOrDefault("job_desc", null));
-                Object salaryMin = meta.get("salary_min");
-                Object salaryMax = meta.get("salary_max");
-                if (salaryMin instanceof Number) c.put("salaryMin", ((Number) salaryMin).intValue());
-                if (salaryMax instanceof Number) c.put("salaryMax", ((Number) salaryMax).intValue());
+                c.put("title", metaFirst(meta, "title", "job_name", "jobName") == null ? "参考片段" : metaFirst(meta, "title", "job_name", "jobName"));
+                String src = metaString(meta, "", "source");
+                if (src.isEmpty()) src = metaString(meta, "", "source_table", "sourceTable");
+                c.put("source", src);
+                Object sourceTableRaw = metaFirst(meta, "source_table", "sourceTable");
+                if (sourceTableRaw != null) c.put("source_table", sourceTableRaw);
+                Object jobIdRaw = metaFirst(meta, "job_id", "jobId", "id");
+                if (jobIdRaw != null) c.put("job_id", jobIdRaw);
+                Object jobUrl = metaFirst(meta, "job_url", "jobUrl", "url");
+                if (jobUrl != null) c.put("job_url", jobUrl);
+                Object jobName = metaFirst(meta, "job_name", "jobName");
+                if (jobName != null) c.put("job_name", jobName);
+                Object companyName = metaFirst(meta, "company_name", "companyName");
+                if (companyName != null) c.put("company_name", companyName);
+                Object city = metaFirst(meta, "city");
+                if (city != null) c.put("city", city);
+                Object experience = metaFirst(meta, "experience");
+                if (experience != null) c.put("experience", experience);
+                Object education = metaFirst(meta, "education");
+                if (education != null) c.put("education", education);
+                Object companyIndustry = metaFirst(meta, "company_industry", "companyIndustry");
+                if (companyIndustry != null) c.put("company_industry", companyIndustry);
+                Object companySize = metaFirst(meta, "company_size", "companySize");
+                if (companySize != null) c.put("company_size", companySize);
+                Object companyWelfare = metaFirst(meta, "company_welfare", "companyWelfare");
+                if (companyWelfare != null) c.put("company_welfare", companyWelfare);
+                Object publishDate = metaFirst(meta, "publish_date", "publishDate");
+                if (publishDate != null) c.put("publish_date", publishDate);
+                Object jobKeywords = metaFirst(meta, "job_keywords", "jobKeywords", "keywords");
+                if (jobKeywords != null) c.put("job_keywords", jobKeywords);
+                Object jobDesc = metaFirst(meta, "job_desc", "jobDesc", "description");
+                if (jobDesc != null) c.put("job_desc", jobDesc);
+                Integer salaryMin = asInteger(metaFirst(meta, "salary_min", "salaryMin", "minSalaryK", "minSalary"));
+                Integer salaryMax = asInteger(metaFirst(meta, "salary_max", "salaryMax", "maxSalaryK", "maxSalary"));
+                if (salaryMin != null) c.put("salaryMin", salaryMin);
+                if (salaryMax != null) c.put("salaryMax", salaryMax);
 
                 Long jobId = asLong(c.get("job_id"));
                 String sourceTable = asString(c.get("source_table"), "");
@@ -762,6 +758,10 @@ public class AgentChatService {
 
     private List<Map<String, Object>> fetchCandidates(String userMessage, Map<String, Object> profile) {
         Map<String, Object> args = buildJobSearchArgs(userMessage, profile);
+        return fetchCandidatesByRag(userMessage, profile, args);
+    }
+
+    private List<Map<String, Object>> fetchCandidatesByRag(String userMessage, Map<String, Object> profile, Map<String, Object> args) {
         String source = asString(args.get("source"), "all");
         String keyword = asString(args.get("keyword"), "");
         String city = asString(args.get("city"), "");
@@ -771,16 +771,186 @@ public class AgentChatService {
         Integer maxSalaryK = asInteger(args.get("maxSalaryK"));
         String company = asString(args.get("company"), "");
         Integer limit = asInteger(args.get("limit"));
-        if (limit == null) {
-            limit = 30;
+        int topK = capTopK(limit);
+
+        String query = buildCandidateRagQuery(userMessage, profile, args);
+        String filter = buildCandidateFilterExpression(source, city, education, experience);
+
+        try {
+            SearchRequest.Builder reqBuilder = SearchRequest.builder().query(query).topK(topK);
+            if (!filter.isEmpty()) {
+                reqBuilder.filterExpression(filter);
+            }
+            List<Document> docs = vectorStore.similaritySearch(reqBuilder.build());
+            if ((docs == null || docs.isEmpty()) && !filter.isEmpty()) {
+                docs = vectorStore.similaritySearch(SearchRequest.builder().query(query).topK(topK).build());
+            }
+            List<Map<String, Object>> candidates = docsToJobCandidates(docs, topK);
+            if (candidates != null && !candidates.isEmpty()) {
+                return candidates;
+            }
+        } catch (Exception ignored) {
         }
-        return jobTools.jobSearch(source, keyword, city, education, experience, minSalaryK, maxSalaryK, company, limit);
+
+        return List.of();
+    }
+
+    private int capTopK(Integer limit) {
+        int def = 30;
+        int v = limit == null ? def : limit;
+        int capped = Math.max(1, Math.min(CANDIDATE_TOPK_MAX, v));
+        return capped;
+    }
+
+    private String buildCandidateRagQuery(String userMessage, Map<String, Object> profile, Map<String, Object> args) {
+        String keyword = asString(args == null ? null : args.get("keyword"), "");
+        String company = asString(args == null ? null : args.get("company"), "");
+        String city = asString(args == null ? null : args.get("city"), "");
+        Integer minSalaryK = asInteger(args == null ? null : args.get("minSalaryK"));
+        Integer maxSalaryK = asInteger(args == null ? null : args.get("maxSalaryK"));
+
+        StringBuilder sb = new StringBuilder();
+        if (!keyword.isEmpty()) sb.append(keyword).append(" ");
+        if (!company.isEmpty()) sb.append(company).append(" ");
+        if (!city.isEmpty()) sb.append(city).append(" ");
+        if (minSalaryK != null || maxSalaryK != null) {
+            sb.append("薪资 ");
+            if (minSalaryK != null) sb.append(minSalaryK).append("K以上 ");
+            if (maxSalaryK != null) sb.append(maxSalaryK).append("K以内 ");
+        }
+        String p = renderProfile(profile);
+        if (!p.isEmpty()) sb.append(p).append(" ");
+        if (userMessage != null && !userMessage.trim().isEmpty()) sb.append(userMessage.trim());
+        String q = sb.toString().trim();
+        return q.isEmpty() ? (userMessage == null ? "" : userMessage.trim()) : q;
+    }
+
+    private String buildCandidateFilterExpression(String source, String city, String education, String experience) {
+        List<String> parts = new ArrayList<>();
+        String src = source == null ? "" : source.trim().toLowerCase();
+        if ("boss".equals(src) || "51job".equals(src)) {
+            parts.add("source == '" + escapeFilterText(src) + "'");
+        }
+        Set<String> cities = parseCities(city);
+        String cityExpr = buildCityFilterExpression(cities);
+        if (!cityExpr.isEmpty()) {
+            parts.add("(" + cityExpr + ")");
+        }
+        String eduExpr = buildEducationFilterExpression(education);
+        if (!eduExpr.isEmpty()) {
+            parts.add(eduExpr);
+        }
+        String expExpr = buildExperienceFilterExpression(experience);
+        if (!expExpr.isEmpty()) {
+            parts.add(expExpr);
+        }
+        if (parts.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < parts.size(); i++) {
+            if (i > 0) sb.append(" && ");
+            sb.append(parts.get(i));
+        }
+        return sb.toString();
+    }
+
+    private String buildEducationFilterExpression(String education) {
+        String edu = education == null ? "" : education.trim();
+        if (edu.isEmpty() || edu.contains("不限")) {
+            return "";
+        }
+        return "education == '" + escapeFilterText(edu) + "'";
+    }
+
+    private Set<String> parseCities(String city) {
+        if (city == null || city.trim().isEmpty()) return Set.of();
+        Set<String> set = new LinkedHashSet<>();
+        for (String part : city.split("[,，/\\s]+")) {
+            String t = part == null ? "" : part.trim();
+            if (!t.isEmpty()) set.add(t);
+        }
+        return set;
+    }
+
+    private List<Map<String, Object>> docsToJobCandidates(List<Document> docs, int limit) {
+        if (docs == null || docs.isEmpty()) return List.of();
+        int lim = Math.max(1, Math.min(CANDIDATE_TOPK_MAX, limit));
+
+        Map<String, Map<String, Object>> outMap = new LinkedHashMap<>();
+        for (Document d : docs) {
+            if (d == null) continue;
+            Map<String, Object> card = docToJobCard(d);
+            if (card == null || card.isEmpty()) continue;
+            String key = candidateKey(card);
+            if (key.isEmpty() || outMap.containsKey(key)) continue;
+            outMap.put(key, card);
+            if (outMap.size() >= lim) break;
+        }
+        return new ArrayList<>(outMap.values());
+    }
+
+    private String candidateKey(Map<String, Object> card) {
+        if (card == null) return "";
+        String source = asString(card.get("source"), "");
+        Long id = asLong(card.get("id"));
+        if (!source.isEmpty() && id != null) {
+            return source + ":" + id;
+        }
+        String jobName = asString(card.get("jobName"), "");
+        String companyName = asString(card.get("companyName"), "");
+        String city = asString(card.get("city"), "");
+        if (!jobName.isEmpty() || !companyName.isEmpty()) {
+            return jobName + "|" + companyName + "|" + city;
+        }
+        return "";
+    }
+
+    private Map<String, Object> docToJobCard(Document d) {
+        Map<String, Object> meta = d.getMetadata() == null ? Map.of() : d.getMetadata();
+        Map<String, Object> card = new HashMap<>();
+
+        String source = metaString(meta, "", "source");
+        String sourceTable = metaString(meta, "", "source_table", "sourceTable");
+        Long jobId = asLong(metaFirst(meta, "job_id", "jobId", "id"));
+        if (sourceTable.isEmpty()) {
+            if ("51job".equalsIgnoreCase(source)) {
+                sourceTable = "job_info_51job";
+            } else if ("boss".equalsIgnoreCase(source)) {
+                sourceTable = "job_info";
+            }
+        }
+
+        card.put("source", source);
+        if (jobId != null) card.put("id", jobId);
+        card.put("jobName", metaString(meta, "", "job_name", "jobName"));
+        card.put("companyName", metaString(meta, "", "company_name", "companyName"));
+        card.put("city", metaString(meta, "", "city"));
+        card.put("jobUrl", metaString(meta, "", "job_url", "jobUrl", "url"));
+        card.put("experience", metaString(meta, "", "experience"));
+        card.put("education", metaString(meta, "", "education"));
+        card.put("jobDesc", trimTo(metaString(meta, "", "job_desc", "jobDesc", "description"), 8000));
+        card.put("jobKeywords", trimTo(metaString(meta, "", "job_keywords", "jobKeywords", "keywords"), 2000));
+        card.put("companyIndustry", trimTo(metaString(meta, "", "company_industry", "companyIndustry"), 256));
+        card.put("companySize", trimTo(metaString(meta, "", "company_size", "companySize"), 256));
+        card.put("companyWelfare", trimTo(metaString(meta, "", "company_welfare", "companyWelfare"), 2000));
+        card.put("publishDate", metaFirst(meta, "publish_date", "publishDate"));
+
+        Integer salaryMin = asInteger(metaFirst(meta, "salary_min", "salaryMin", "minSalaryK", "minSalary"));
+        Integer salaryMax = asInteger(metaFirst(meta, "salary_max", "salaryMax", "maxSalaryK", "maxSalary"));
+        if (salaryMin != null) card.put("salaryMin", salaryMin);
+        if (salaryMax != null) card.put("salaryMax", salaryMax);
+
+        if (isBlank(card.get("jobName"))) {
+            String title = metaString(meta, "", "title");
+            if (!title.isEmpty()) card.put("jobName", title);
+        }
+
+        return card;
     }
 
     private Map<String, Object> buildJobSearchArgs(String userMessage, Map<String, Object> profile) {
         StringBuilder sb = new StringBuilder();
         sb.append("你是一个岗位检索条件提取器。只输出一个 JSON Object，不要任何解释文字，不要代码块。");
-        sb.append("你需要从用户问题与用户画像中提取用于数据库检索的硬约束。");
+        sb.append("你需要从用户问题与用户画像中提取用于向量检索/RAG 的硬约束。");
         sb.append("\n字段：source, keyword, city, education, experience, minSalaryK, maxSalaryK, company, limit。");
         sb.append("\n规则：");
         sb.append("\n- source 只允许 boss/51job/all（不确定就 all）。");
@@ -843,7 +1013,7 @@ public class AgentChatService {
                 + (p.isEmpty() ? "" : ("用户画像：\n" + p + "\n\n"))
                 + "用户问题：\n" + userMessage + "\n\n"
                 + (citationsText.isEmpty() ? "" : ("语义参考资料：\n" + citationsText + "\n\n"))
-                + "候选岗位（数据库检索结果）：\n" + candidatesText;
+                + "候选岗位（向量检索候选）：\n" + candidatesText;
 
         String raw = "";
         try {
@@ -945,6 +1115,18 @@ public class AgentChatService {
     }
 
     private String generateFinalReply(String userMessage, Map<String, Object> profile, List<Map<String, Object>> citations, List<Map<String, Object>> recommended) {
+        FinalReplyPrompt prompt = buildFinalReplyPrompt(userMessage, profile, citations, recommended);
+        try {
+            return chatClient.prompt().system(prompt.system()).user(prompt.user()).call().content();
+        } catch (Exception e) {
+            return "本次推荐已生成，但输出建议时发生异常。你可以缩短问题或减少约束条件后重试。";
+        }
+    }
+
+    private record FinalReplyPrompt(String system, String user) {
+    }
+
+    private FinalReplyPrompt buildFinalReplyPrompt(String userMessage, Map<String, Object> profile, List<Map<String, Object>> citations, List<Map<String, Object>> recommended) {
         String p = renderProfile(profile);
         String citationsText = renderCitationsForPrompt(citations, 5);
         String selectedText = renderCandidatesForSelection(recommended, 10);
@@ -952,7 +1134,7 @@ public class AgentChatService {
         String system = ""
                 + "你是招聘数据分析系统内置的智能体。你将综合三类信息输出最终岗位推荐："
                 + "\n1) 语义参考资料（仅作背景证据）"
-                + "\n2) 数据库岗位检索并精排后的最终推荐列表（必须以此为准）"
+                + "\n2) RAG候选检索并精排后的最终推荐列表（必须以此为准）"
                 + "\n3) 你的通用求职知识（用于给建议与行动清单）"
                 + "\n要求："
                 + "\n- 中文输出，结构清晰。"
@@ -965,11 +1147,7 @@ public class AgentChatService {
                 + (citationsText.isEmpty() ? "" : ("语义参考资料：\n" + citationsText + "\n\n"))
                 + "最终推荐岗位（用于页面卡片展示，必须以此为准）：\n" + selectedText;
 
-        try {
-            return chatClient.prompt().system(system).user(user).call().content();
-        } catch (Exception e) {
-            return "本次推荐已生成，但输出建议时发生异常。你可以缩短问题或减少约束条件后重试。";
-        }
+        return new FinalReplyPrompt(system, user);
     }
 
     /**

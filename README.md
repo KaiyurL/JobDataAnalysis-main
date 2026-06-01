@@ -129,8 +129,17 @@ docker run --name jobdata-pg \
 
 Embedding / 模型如何切换：
 - 直接修改后端配置文件：`backend/src/main/resources/application.yml`
-  - `spring.ai.model.chat` 固定为 `openai`（用于 DashScope compatible-mode 聊天）
+  - `spring.ai.model.chat` 固定为 `openai`（用于 DashScope compatible-mode 聊天），模型是百炼 `qwen3.5-omni-plus-2026-03-15`
   - `spring.ai.model.embedding` 在 `ollama` / `openai` 间切换（RAG 向量化用哪个 embedding）
+  - 使用 `ollama` 模型时，需要下载模型，命令：
+    ```bash
+    ollama pull qwen3-embedding:4b
+    ```
+    启动 Ollama 服务（默认端口 `11434`）,命令：
+    ```bash
+    ollama server
+    ```
+  -  使用openai模型时，用的是百炼平台embedding模型 `text-embedding-v3`
   - `spring.ai.openai.embedding.options.model`（例如 `text-embedding-v3`）
   - `spring.ai.ollama.embedding.options.model`（例如 `qwen3-embedding:4b`）
   - `spring.ai.vectorstore.pgvector.dimensions`（例如 `1024`，需与 embedding 输出维度一致）

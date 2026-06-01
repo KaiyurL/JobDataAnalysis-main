@@ -1,8 +1,6 @@
 package com.jobdata.ai;
 
 import com.jobdata.ai.service.AgentChatService;
-import com.jobdata.ai.tools.JobToolResultStore;
-import com.jobdata.ai.tools.JobTools;
 import com.jobdata.ai.tools.UserTools;
 import com.jobdata.entity.JobInfo;
 import com.jobdata.service.JobInfo51JobService;
@@ -39,13 +37,7 @@ class AgentChatServiceCitationsTest {
     VectorStore vectorStore;
 
     @Mock
-    JobTools jobTools;
-
-    @Mock
     UserTools userTools;
-
-    @Mock
-    JobToolResultStore jobToolResultStore;
 
     @Mock
     JobInfoService jobInfoService;
@@ -55,7 +47,7 @@ class AgentChatServiceCitationsTest {
 
     @Test
     void buildCitations_enriches_from_db_when_metadata_missing() throws Exception {
-        AgentChatService agentChatService = new AgentChatService(builder, vectorStore, jobTools, userTools, jobToolResultStore, jobInfoService, jobInfo51JobService);
+        AgentChatService agentChatService = new AgentChatService(builder, vectorStore, userTools, jobInfoService, jobInfo51JobService);
 
         Document doc = new Document("text", Map.of(
                 "source_table", "job_info",

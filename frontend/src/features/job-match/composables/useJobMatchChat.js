@@ -1,4 +1,4 @@
-import { nextTick, ref } from 'vue'
+import { nextTick, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { clearAuth, getToken } from '@/shared/authStorage.js'
 
@@ -82,6 +82,12 @@ export function useJobMatchChat(deps) {
     const reader = res.body.getReader()
     const decoder = new TextDecoder('utf-8')
     let buffer = ''
+    let pendingJson = ''
+
+    const normalizeNewlines = (s) => {
+      if (!s) return ''
+      return String(s).replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    }
 
     const flushBlock = (block) => {
       const lines = block.split('\n')
@@ -93,17 +99,38 @@ export function useJobMatchChat(deps) {
       }
       if (dataLines.length === 0) return
       const dataStr = dataLines.join('\n')
-      let obj = null
-      try {
-        obj = JSON.parse(dataStr)
-      } catch {
+      const merged = pendingJson ? `${pendingJson}${dataStr}` : dataStr
+      const trimmed = merged.trim()
+      if (!trimmed) return
+
+      const looksLikeJson = trimmed.startsWith('{') || trimmed.startsWith('[')
+      if (!looksLikeJson) {
+        pendingJson = ''
+        onDelta?.(merged)
         return
       }
+
+      let obj = null
+      try {
+        obj = JSON.parse(merged)
+      } catch {
+        if (merged.length > 2 * 1024 * 1024) {
+          pendingJson = ''
+          onDelta?.(merged)
+          return
+        }
+        pendingJson = merged
+        return
+      }
+
+      pendingJson = ''
       if (!obj || typeof obj !== 'object') return
       if (obj.type === 'delta') {
         onDelta?.(String(obj.text || ''))
       } else if (obj.type === 'end') {
         onEnd?.(obj.payload || {})
+      } else if (typeof obj.text === 'string') {
+        onDelta?.(obj.text)
       }
     }
 
@@ -111,6 +138,7 @@ export function useJobMatchChat(deps) {
       const { value, done } = await reader.read()
       if (done) break
       buffer += decoder.decode(value, { stream: true })
+      buffer = normalizeNewlines(buffer)
       let idx
       while ((idx = buffer.indexOf('\n\n')) >= 0) {
         const block = buffer.slice(0, idx)
@@ -118,7 +146,27 @@ export function useJobMatchChat(deps) {
         if (block.trim()) flushBlock(block)
       }
     }
+    buffer += decoder.decode()
+    buffer = normalizeNewlines(buffer)
     if (buffer.trim()) flushBlock(buffer)
+    if (pendingJson.trim()) {
+      try {
+        const obj = JSON.parse(pendingJson)
+        if (obj && typeof obj === 'object') {
+          if (obj.type === 'delta') {
+            onDelta?.(String(obj.text || ''))
+          } else if (obj.type === 'end') {
+            onEnd?.(obj.payload || {})
+          } else if (typeof obj.text === 'string') {
+            onDelta?.(obj.text)
+          }
+        }
+      } catch {
+        onDelta?.(pendingJson)
+      } finally {
+        pendingJson = ''
+      }
+    }
   }
 
   const mapAgentJobCards = (cards) => {
@@ -208,21 +256,61 @@ export function useJobMatchChat(deps) {
     sending.value = true
     try {
       const msgId = `a_${Date.now()}`
-      const msg = { id: msgId, role: 'assistant', kind: 'text', content: '' }
+        const msg = reactive({ id: msgId, role: 'assistant', kind: 'text', content: '' })
       messages.value.push(msg)
       await scrollToBottom()
 
       let finalPayload = null
+      let pendingDelta = ''
+      let deltaRaf = 0
+      let scrollRaf = 0
+
+      const scheduleScroll = () => {
+        if (typeof window === 'undefined') return
+        if (scrollRaf) return
+        scrollRaf = window.requestAnimationFrame(async () => {
+          scrollRaf = 0
+          await scrollToBottom()
+        })
+      }
+
+      const scheduleDeltaFlush = () => {
+        if (!pendingDelta) return
+        msg.content = (msg.content || '') + pendingDelta
+        pendingDelta = ''
+      }
+
+      const scheduleDelta = () => {
+        if (typeof window === 'undefined') {
+          scheduleDeltaFlush()
+          scrollToBottom()
+          return
+        }
+        if (deltaRaf) return
+        deltaRaf = window.requestAnimationFrame(() => {
+          deltaRaf = 0
+          scheduleDeltaFlush()
+          scheduleScroll()
+        })
+      }
+
       await callAgentChatStream(
         content,
         (delta) => {
-          msg.content = (msg.content || '') + (delta || '')
-          scrollToBottom()
+          pendingDelta += delta || ''
+          scheduleDelta()
         },
         (payload) => {
           finalPayload = payload || null
         }
       )
+
+      if (typeof window !== 'undefined') {
+        if (deltaRaf) window.cancelAnimationFrame(deltaRaf)
+        if (scrollRaf) window.cancelAnimationFrame(scrollRaf)
+      }
+      scheduleDeltaFlush()
+      await scrollToBottom()
 
       if (!msg.content) {
         msg.content = '未返回内容'
