@@ -121,3 +121,19 @@ export const recordJobHistory = (data) => http.post('/user/job-history', data)
  * @returns {Promise<any>}
  */
 export const recordJobHistoryData = (data) => requestApi(recordJobHistory(data), '记录历史失败')
+
+/**
+ * 批量删除浏览历史。
+ *
+ * @param {{ ids: Array<number|string> }} data
+ * @returns {import('axios').AxiosPromise<any>}
+ */
+export const batchDeleteJobHistory = (data) => http.post('/user/job-history/batch-delete', data)
+
+/**
+ * 批量删除浏览历史（已解包）。
+ *
+ * @param {{ ids: Array<number|string> }} data
+ * @returns {Promise<any>}
+ */
+export const batchDeleteJobHistoryData = (data) => requestApi(batchDeleteJobHistory(data), '删除历史失败')

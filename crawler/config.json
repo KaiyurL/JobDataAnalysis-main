@@ -1,8 +1,8 @@
 {
   "platform" : "boss",
-  "keywords" : [ "java", "python", "前端" , "后端", "全栈", "数据" ,"ai","软件开发","小程序","移动开发"],
-  "cities" : [ "福州" ,"北京","上海","广州","深圳","厦门","天津"],
-  "pages_per_keyword" : 70,
+  "keywords" : [ "java", "python", "前端", "后端", "全栈", "数据", "ai", "软件开发", "小程序", "移动开发" ],
+  "cities" : [ "福州", "北京", "上海", "广州", "深圳", "厦门", "天津" ],
+  "pages_per_keyword" : 30,
   "pages_per_city_51job" : 1,
   "delay_min" : 2,
   "delay_max" : 3,
@@ -29,5 +29,5 @@
     "合肥" : "150200",
     "福州" : "110300"
   },
-  "browser" : "chrome"
+  "browser" : "edge"
 }

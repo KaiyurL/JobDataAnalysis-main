@@ -1,12 +1,12 @@
 package com.jobdata.ai.tools;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jobdata.ai.context.UserContextHolder;
+import com.jobdata.ai.common.UserContextHolder;
+import com.jobdata.ai.entity.UserProfile;
+import com.jobdata.ai.service.UserProfileService;
 import com.jobdata.entity.UserFavoriteJob;
-import com.jobdata.entity.UserProfile;
 import com.jobdata.service.UserFavoriteJobService;
 import com.jobdata.service.UserJobHistoryService;
-import com.jobdata.service.UserProfileService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

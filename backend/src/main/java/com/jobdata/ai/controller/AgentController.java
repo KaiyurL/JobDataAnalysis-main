@@ -1,7 +1,7 @@
 package com.jobdata.ai.controller;
 
-import com.jobdata.ai.model.AgentChatResponse;
-import com.jobdata.ai.model.AgentStreamEvent;
+import com.jobdata.ai.dto.AgentChatResponse;
+import com.jobdata.ai.dto.AgentStreamEvent;
 import com.jobdata.ai.service.AgentChatService;
 import com.jobdata.dto.AiChatRequest;
 import com.jobdata.dto.Result;

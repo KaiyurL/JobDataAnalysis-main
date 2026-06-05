@@ -2,9 +2,9 @@ package com.jobdata.ai.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jobdata.ai.context.UserContextHolder;
-import com.jobdata.ai.model.AgentChatResponse;
-import com.jobdata.ai.model.AgentStreamEvent;
+import com.jobdata.ai.common.UserContextHolder;
+import com.jobdata.ai.dto.AgentChatResponse;
+import com.jobdata.ai.dto.AgentStreamEvent;
 import com.jobdata.ai.tools.UserTools;
 import com.jobdata.dto.AiChatRequest;
 import com.jobdata.entity.JobInfo;

@@ -1,4 +1,4 @@
-package com.jobdata.ai.model;
+package com.jobdata.ai.dto;
 
 import java.util.Map;
 
@@ -82,3 +82,4 @@ public class AgentStreamEvent {
         this.payload = payload;
     }
 }
+

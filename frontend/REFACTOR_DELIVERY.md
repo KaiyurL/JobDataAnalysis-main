@@ -65,7 +65,7 @@
 
 页面落地点（举例）：
 - Login：失败提示从“统一文案”提升为优先展示后端 message
-- CompanyInsight / SalaryPredict：统一错误提示与图表配色读取主题色
+- Dashboard / CompanyInsight：统一错误提示与图表配色读取主题色
 - JobMatch：匹配分数颜色从硬编码改为读取主题语义色
 
 ## 6. 性能优化
@@ -109,7 +109,7 @@
 
 - 仍有较大 chunk（echarts、导出 PDF 相关依赖）；如需进一步压缩首屏：
   - 将导出 PDF 功能改为按需 import（点击导出时才加载）
-  - 将 echarts/wordcloud 拆为按页面 import（仅 Dashboard/SkillAnalysis 使用时加载）
+  - 将 echarts/wordcloud 拆为按页面 import（仅 Dashboard / CompanyInsight 使用时加载）
 - Safari 真机测试需要在目标环境进行（本地构建与预览已通过） 
 
 ## 10. 当前项目结构与文件作用
@@ -156,7 +156,7 @@ src/
 
   services/                  # 服务层（API 与请求封装）
     http.js                  # Axios 实例 + token 注入 + 401 处理 + 统一解包
-    modules/                 # 按领域拆分的 API 模块（jobs/user/...）
+    modules/                 # 按领域拆分的 API 模块（auth/jobs/user/config/pipeline/rag/resume/...）
     index.js                 # 按领域命名空间聚合导出（*Api）
   api.js                     # 兼容聚合层（历史默认导出，建议新代码不再引用）
 

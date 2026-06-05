@@ -1,6 +1,6 @@
 package com.jobdata.ai;
 
-import com.jobdata.ai.model.AgentStreamEvent;
+import com.jobdata.ai.dto.AgentStreamEvent;
 import com.jobdata.ai.service.AgentChatService;
 import com.jobdata.ai.tools.UserTools;
 import com.jobdata.service.JobInfo51JobService;

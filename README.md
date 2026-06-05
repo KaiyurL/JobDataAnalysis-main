@@ -176,7 +176,11 @@ docker exec -it jobdata-pg psql -U postgres -d job_data -c "\dt"
   - `JOBDATA_PYTHON`：指向已安装依赖的 `python.exe`（避免系统 python 缺 pip/依赖）
   -  爬虫需要的依赖 pip install -r requirements.txt
 
-### 2. 后端启动
+### 2. 后端和emmbedding启动
+如果使用ollama，需要启动ollama服务
+```bash
+ollama server
+```
 
 ```bash
 cd backend

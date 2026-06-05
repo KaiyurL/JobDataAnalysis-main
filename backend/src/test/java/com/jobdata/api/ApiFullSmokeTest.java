@@ -3,12 +3,22 @@ package com.jobdata.api;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobdata.ai.controller.AgentController;
 import com.jobdata.ai.controller.RagAdminController;
-import com.jobdata.ai.model.AgentChatResponse;
-import com.jobdata.ai.model.AgentStreamEvent;
+import com.jobdata.ai.controller.ResumeController;
+import com.jobdata.ai.controller.UserProfileController;
+import com.jobdata.ai.dto.AgentChatResponse;
+import com.jobdata.ai.dto.AgentStreamEvent;
 import com.jobdata.ai.rag.JobRagIndexer;
 import com.jobdata.ai.rag.RagReindexJobManager;
 import com.jobdata.ai.service.AgentChatService;
-import com.jobdata.controller.*;
+import com.jobdata.ai.service.ResumeService;
+import com.jobdata.ai.service.UserProfileService;
+import com.jobdata.controller.AuthController;
+import com.jobdata.controller.ConfigController;
+import com.jobdata.controller.DataManageController;
+import com.jobdata.controller.JobInfo51JobController;
+import com.jobdata.controller.JobInfoController;
+import com.jobdata.controller.PipelineController;
+import com.jobdata.controller.UserActivityController;
 import com.jobdata.dto.AiChatRequest;
 import com.jobdata.entity.User;
 import com.jobdata.entity.User;
@@ -86,14 +96,17 @@ class ApiFullSmokeTest {
         setField(authController, "jwtUtil", jwtUtil);
         setField(authController, "passwordEncoder", passwordEncoder);
 
-        UserController userController = new UserController();
-        setField(userController, "userProfileService", userProfileService);
-        setField(userController, "userFavoriteJobService", userFavoriteJobService);
-        setField(userController, "userJobHistoryService", userJobHistoryService);
-        setField(userController, "objectMapper", objectMapper);
+        UserProfileController userProfileController = new UserProfileController();
+        setField(userProfileController, "userProfileService", userProfileService);
+        setField(userProfileController, "objectMapper", objectMapper);
 
         ResumeController resumeController = new ResumeController();
         setField(resumeController, "resumeService", resumeService);
+
+        UserActivityController userActivityController = new UserActivityController();
+        setField(userActivityController, "userFavoriteJobService", userFavoriteJobService);
+        setField(userActivityController, "userJobHistoryService", userJobHistoryService);
+        setField(userActivityController, "objectMapper", objectMapper);
 
         PipelineController pipelineController = new PipelineController();
         setField(pipelineController, "pipelineService", pipelineService);
@@ -116,8 +129,9 @@ class ApiFullSmokeTest {
         MockMvc mockMvc = MockMvcBuilders
                 .standaloneSetup(
                         authController,
-                        userController,
+                        userProfileController,
                         resumeController,
+                        userActivityController,
                         pipelineController,
                         jobInfoController,
                         jobInfo51JobController,
@@ -135,8 +149,9 @@ class ApiFullSmokeTest {
 
         List<ApiCase> cases = collectCases(List.of(
                 AuthController.class,
-                UserController.class,
                 ResumeController.class,
+                UserProfileController.class,
+                UserActivityController.class,
                 PipelineController.class,
                 JobInfoController.class,
                 JobInfo51JobController.class,

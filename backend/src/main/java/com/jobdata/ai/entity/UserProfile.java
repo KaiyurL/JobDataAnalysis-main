@@ -1,4 +1,4 @@
-package com.jobdata.entity;
+package com.jobdata.ai.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -22,3 +22,4 @@ public class UserProfile {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
+

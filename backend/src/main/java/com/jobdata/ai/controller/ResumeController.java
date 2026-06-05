@@ -1,11 +1,15 @@
-package com.jobdata.controller;
+package com.jobdata.ai.controller;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jobdata.ai.service.ResumeService;
 import com.jobdata.dto.Result;
-import com.jobdata.service.ResumeService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashMap;
@@ -21,7 +25,7 @@ public class ResumeController {
 
     @Autowired
     private ResumeService resumeService;
-    
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
@@ -44,9 +48,8 @@ public class ResumeController {
                     : lower.endsWith(".txt") ? "txt"
                     : "unknown";
 
-            // 1. 解析文件到纯文本
             String text = resumeService.parseResumeFileToText(file);
-            
+
             if (text == null || text.trim().isEmpty()) {
                 if ("pdf".equals(fileType)) {
                     return Result.error("未能从 PDF 中提取到有效文本（可能是扫描件/图片型 PDF）。建议上传可复制文本的 PDF，或导出为 DOCX/TXT 再试。");
@@ -59,11 +62,9 @@ public class ResumeController {
 
             String normalized = text.replace("\u0000", "").trim();
             String clipped = clipText(normalized, 15000);
-            
-            // 2. 将纯文本丢给大模型，提取结构化 JSON
+
             String jsonProfile = resumeService.extractProfileFromText(clipped);
-            
-            // 3. 验证并解析 JSON
+
             Map<String, Object> profileMap = objectMapper.readValue(jsonProfile, new TypeReference<Map<String, Object>>() {});
             Map<String, Object> meta = new HashMap<>();
             meta.put("fileName", filename);

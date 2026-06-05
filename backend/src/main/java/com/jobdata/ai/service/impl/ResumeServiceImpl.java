@@ -1,16 +1,16 @@
-package com.jobdata.service.impl;
+package com.jobdata.ai.service.impl;
 
-import com.jobdata.service.ResumeService;
+import com.jobdata.ai.service.ResumeService;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.hwpf.HWPFDocument;
 import org.apache.poi.hwpf.extractor.WordExtractor;
-import org.apache.poi.xwpf.usermodel.XWPFHeader;
 import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
 import org.apache.poi.xwpf.usermodel.XWPFFooter;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFHeader;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFPictureData;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
@@ -33,8 +33,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,7 +70,7 @@ public class ResumeServiceImpl implements ResumeService {
             throw new IllegalArgumentException("文件名为空");
         }
         filename = filename.toLowerCase();
-        
+
         try (InputStream is = file.getInputStream()) {
             if (filename.endsWith(".pdf")) {
                 try (PDDocument document = PDDocument.load(is)) {
@@ -150,7 +150,6 @@ public class ResumeServiceImpl implements ResumeService {
                     break;
                 }
             } catch (Exception e) {
-                // 继续处理下一页或返回已识别的内容
             }
         }
         if (images.isEmpty()) {
@@ -444,7 +443,7 @@ public class ResumeServiceImpl implements ResumeService {
         Map<String, Object> payload = new HashMap<>();
         payload.put("model", model);
         payload.put("messages", messages);
-        payload.put("temperature", 0.1); // 降低随机性，确保输出结构化
+        payload.put("temperature", 0.1);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -461,7 +460,6 @@ public class ResumeServiceImpl implements ResumeService {
                     String content = (String) msg.get("content");
                     if (content != null) {
                         content = content.trim();
-                        // 移除可能存在的 markdown json 标记
                         if (content.startsWith("```json")) {
                             content = content.substring(7);
                         } else if (content.startsWith("```")) {
@@ -478,3 +476,4 @@ public class ResumeServiceImpl implements ResumeService {
         throw new RuntimeException("AI 解析简历失败或返回格式错误");
     }
 }
+

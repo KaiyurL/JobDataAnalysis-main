@@ -237,6 +237,7 @@ export function useUserDataStore(deps) {
       }
       out.push({
         key: `${h.sourceTable || ''}::${h.jobUrl || ''}::his::${h.id || ''}`,
+        id: h.id,
         sourceTable: h.sourceTable,
         job,
         updatedAt: h.updatedAt || h.createdAt
@@ -244,6 +245,13 @@ export function useUserDataStore(deps) {
     }
     return out
   })
+
+  const deleteJobHistoryBatch = async (ids) => {
+    const list = Array.isArray(ids) ? ids.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0) : []
+    if (!list.length) return
+    await userApi.batchDeleteJobHistoryData({ ids: list })
+    await refreshJobHistory(true)
+  }
 
   /**
    * 切换收藏状态（收藏/取消收藏）。
@@ -290,10 +298,11 @@ export function useUserDataStore(deps) {
    */
   const recordJobHistory = async (sourceTable, job) => {
     const st = String(sourceTable || '').trim()
-    const jobUrl = String(job?.jobUrl || '').trim()
+    const jobUrl = String(job?.jobUrl || job?.job_url || job?.url || '').trim()
     if (!st || !jobUrl) return
     try {
-      await userApi.recordJobHistoryData({ sourceTable: st, job })
+      const payloadJob = jobUrl === String(job?.jobUrl || '').trim() ? job : { ...(job || {}), jobUrl }
+      await userApi.recordJobHistoryData({ sourceTable: st, job: payloadJob })
     } catch {}
   }
 
@@ -359,7 +368,9 @@ export function useUserDataStore(deps) {
     jobHistoryList,
     openFavorites,
     openHistory,
+    isFavorite,
     toggleFavorite,
+    deleteJobHistoryBatch,
     openJobUrl,
     sourceLabel,
     sourceTagType,

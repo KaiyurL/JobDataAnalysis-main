@@ -1,4 +1,4 @@
-package com.jobdata.ai.context;
+package com.jobdata.ai.common;
 
 /**
  * 用户上下文持有者：使用 ThreadLocal 保存当前请求的用户 ID。
@@ -31,3 +31,4 @@ public class UserContextHolder {
         USER_ID.remove();
     }
 }
+

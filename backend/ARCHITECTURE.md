@@ -18,16 +18,15 @@
 
 - 认证与用户：
   - [AuthController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/controller/AuthController.java)：登录/注册，签发 JWT
-  - [UserController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/controller/UserController.java)：用户画像、收藏、浏览历史
+  - [UserActivityController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/controller/UserActivityController.java)：用户收藏、浏览历史
 - 职位与统计：
   - [JobInfoController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/controller/JobInfoController.java)：BOSS 职位分页与统计
   - [JobInfo51JobController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/controller/JobInfo51JobController.java)：51Job 职位分页与统计
 - 数据更新与流水线：
   - [DataManageController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/controller/DataManageController.java)：爬虫更新流程控制与日志清理
   - [PipelineController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/controller/PipelineController.java)：触发离线 pipeline、查询状态/产物、下载文件
-- 配置与简历：
+- 配置：
   - [ConfigController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/controller/ConfigController.java)：crawler/config.json 读取与更新
-  - [ResumeController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/controller/ResumeController.java)：简历上传解析与结构化抽取
 
 ### service（业务编排层）
 
@@ -37,21 +36,20 @@
   - [JobInfoService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/JobInfoService.java)
   - [JobInfo51JobService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/JobInfo51JobService.java)
   - [UserService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/UserService.java)
-  - [UserProfileService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/UserProfileService.java)
   - [UserFavoriteJobService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/UserFavoriteJobService.java)
   - [UserJobHistoryService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/UserJobHistoryService.java)
   - [ConfigService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/ConfigService.java)
   - [DataManageService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/DataManageService.java)
   - [PipelineService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/PipelineService.java)
-  - [ResumeService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/ResumeService.java)
 - 默认实现（MyBatis-Plus ServiceImpl 为主）：
   - [JobInfoServiceImpl.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/impl/JobInfoServiceImpl.java)：职位查询与统计聚合
   - [JobInfo51JobServiceImpl.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/impl/JobInfo51JobServiceImpl.java)
   - [UserServiceImpl.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/impl/UserServiceImpl.java)
+  - [UserFavoriteJobServiceImpl.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/impl/UserFavoriteJobServiceImpl.java)
+  - [UserJobHistoryServiceImpl.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/impl/UserJobHistoryServiceImpl.java)
   - [ConfigServiceImpl.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/impl/ConfigServiceImpl.java)：定位 crawler 目录并读写 config.json
   - [DataManageServiceImpl.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/impl/DataManageServiceImpl.java)：启动 spider.py、日志采集、登录确认
   - [PipelineServiceImpl.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/impl/PipelineServiceImpl.java)：执行 nlp_job_pipeline.py、缓存与产物管理
-  - [ResumeServiceImpl.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/service/impl/ResumeServiceImpl.java)：文件解析/OCR/调用模型抽取 JSON
 
 ### mapper（数据访问层，MyBatis-Plus）
 
@@ -62,7 +60,6 @@
   - [JobInfo51JobMapper.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/mapper/JobInfo51JobMapper.java)：job_info_51job CRUD + 指纹查询
 - 用户：
   - [UserMapper.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/mapper/UserMapper.java)
-  - [UserProfileMapper.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/mapper/UserProfileMapper.java)
   - [UserFavoriteJobMapper.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/mapper/UserFavoriteJobMapper.java)
   - [UserJobHistoryMapper.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/mapper/UserJobHistoryMapper.java)
 
@@ -75,7 +72,6 @@
   - [JobInfo51Job.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/entity/JobInfo51Job.java)（job_info_51job）
 - 用户域：
   - [User.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/entity/User.java)（users）
-  - [UserProfile.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/entity/UserProfile.java)（user_profile）
   - [UserFavoriteJob.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/entity/UserFavoriteJob.java)（user_favorite_job）
   - [UserJobHistory.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/entity/UserJobHistory.java)（user_job_history）
 
@@ -120,17 +116,23 @@
 - 对外接口：
   - [AgentController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/ai/controller/AgentController.java)（`/api/agent/chat`、`/api/agent/chat/stream`）
   - [RagAdminController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/ai/controller/RagAdminController.java)（`/api/rag/reindex/jobs`）
+- 简历与画像：
+  - [ResumeController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/ai/controller/ResumeController.java)（`/api/resume/parse`）
+  - [UserProfileController.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/ai/controller/UserProfileController.java)（`/api/user/profile`）
 - 核心编排：
   - [AgentChatService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/ai/service/AgentChatService.java)：聚合画像、向量检索、候选召回、精排与最终回复
+- AI Service：
+  - [ResumeService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/ai/service/ResumeService.java)
+  - [UserProfileService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/ai/service/UserProfileService.java)
 - 工具（Tool Calling）：
   - [JobTools.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/ai/tools/JobTools.java)：job_search（数据库检索候选）
   - [UserTools.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/ai/tools/UserTools.java)：user_*（画像/收藏/历史）
   - [JobToolResultStore.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/ai/tools/JobToolResultStore.java)：暂存岗位卡片（单次请求内）
 - RAG 索引：
   - [JobRagIndexer.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/ai/rag/JobRagIndexer.java)：将岗位构造成向量文档写入向量库
-  - [JobDataCleanupService.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/ai/rag/JobDataCleanupService.java)：重建索引前对 job_url 去重（清洗重复数据）
+  - [RagReindexJobManager.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/ai/rag/RagReindexJobManager.java)：重建索引任务编排（含数据清洗与进度管理）
 - 线程上下文：
-  - [UserContextHolder.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/ai/context/UserContextHolder.java)：ThreadLocal 保存 userId（供 user_* 工具读取）
+  - [UserContextHolder.java](file:///d:/课程文件/智能应用/project/JobDataAnalysis-main/JobDataAnalysis-main/backend/src/main/java/com/jobdata/ai/common/UserContextHolder.java)：ThreadLocal 保存 userId（供 user_* 工具读取）
 
 ## 测试与报告
 
@@ -174,10 +176,9 @@ com/jobdata/
 
   controller/                       # HTTP 接口层：参数接收/鉴权上下文取 userId/返回 Result
     AuthController.java             # 登录/注册，签发 JWT
-    UserController.java             # 用户画像、收藏、浏览历史
+    UserActivityController.java     # 用户收藏、浏览历史
     JobInfoController.java          # BOSS 职位分页与统计
     JobInfo51JobController.java     # 51Job 职位分页与统计
-    ResumeController.java           # 简历上传解析、结构化抽取
     ConfigController.java           # crawler/config.json 读取与更新
     DataManageController.java       # 爬虫更新流程控制、日志清理、登录确认
     PipelineController.java         # 离线 pipeline 触发、状态/产物查询、产物文件下载
@@ -202,7 +203,6 @@ com/jobdata/
     JobInfo.java                    # job_info
     JobInfo51Job.java               # job_info_51job
     User.java                       # users
-    UserProfile.java                # user_profile
     UserFavoriteJob.java            # user_favorite_job
     UserJobHistory.java             # user_job_history
 
@@ -230,22 +230,35 @@ com/jobdata/
     GlobalExceptionHandler.java     # 统一转为 Result
 
   ai/                               # AI 模块（Spring AI + RAG + Tool Calling）
+    common/
+      EmbeddingDimensionValidator.java # 向量维度配置校验
+      UserContextHolder.java          # ThreadLocal 保存 userId（供 user_* 工具读取）
     controller/
       AgentController.java          # /api/agent/chat 与 /api/agent/chat/stream
       RagAdminController.java       # /api/rag/reindex/jobs（重建索引前会清洗 job_url 重复数据）
+      ResumeController.java         # /api/resume/parse（上传简历解析）
+      UserProfileController.java    # /api/user/profile（用户画像读写）
+    dto/
+      AgentChatResponse.java        # AI 对话响应
+      AgentStreamEvent.java         # SSE 流式事件模型
+    entity/
+      UserProfile.java              # user_profile（画像表）
+    mapper/
+      UserProfileMapper.java        # user_profile CRUD
     service/
       AgentChatService.java         # 画像聚合、向量检索、候选召回、精排、生成最终回复
+      ResumeService.java            # 简历文件解析与模型抽取
+      UserProfileService.java       # 用户画像读写
+      impl/
+        ResumeServiceImpl.java      # 简历解析实现
+        UserProfileServiceImpl.java # 用户画像实现
     tools/
       JobTools.java                 # job_search：从真实数据库筛选岗位
       UserTools.java                # user_*：读取/更新用户画像与收藏/历史
       JobToolResultStore.java       # 暂存岗位卡片（单次请求内）
     rag/
       JobRagIndexer.java            # 将岗位构造成向量文档写入向量库
-    model/
-      AgentChatResponse.java        # AI 对话响应
-      AgentStreamEvent.java         # SSE 流式事件模型
-    context/
-      UserContextHolder.java        # ThreadLocal 保存 userId（供 user_* 工具读取）
+      RagReindexJobManager.java     # 重建索引任务编排
 ```
 
 ### 3) 分层规则（约定）

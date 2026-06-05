@@ -107,8 +107,24 @@
             <el-skeleton :rows="6" animated />
           </div>
           <el-empty v-else-if="!jobHistoryList.length" description="暂无浏览历史" />
-          <div v-else class="jd-jobs-grid">
-            <el-card v-for="c in jobHistoryList" :key="c.key" shadow="hover" class="jd-job-card">
+          <div v-else>
+            <div style="display: flex; align-items: center; gap: 8px; padding: 6px 2px 12px">
+              <el-button size="small" type="danger" plain @click="historySelectMode = !historySelectMode">
+                {{ historySelectMode ? '取消批量' : '批量删除' }}
+              </el-button>
+              <el-button
+                size="small"
+                type="danger"
+                :disabled="!historySelectedIds.length"
+                @click="deleteSelectedHistory"
+              >
+                删除所选（{{ historySelectedIds.length }}）
+              </el-button>
+              <el-button size="small" :disabled="!jobHistoryList.length" @click="selectAllHistory">全选</el-button>
+              <el-button size="small" :disabled="!historySelectedIds.length" @click="historySelectedIds = []">清空选择</el-button>
+            </div>
+            <div class="jd-jobs-grid">
+              <el-card v-for="c in jobHistoryList" :key="c.key" shadow="hover" class="jd-job-card">
               <div class="jd-job-card__head">
                 <div class="jd-job-card__title">{{ c.job.jobName }}</div>
                 <div v-if="c.job.salaryMin != null && c.job.salaryMax != null" class="jd-job-card__salary">
@@ -139,8 +155,15 @@
                 <el-button size="small" type="primary" plain @click.stop="openJobUrl(c.job.jobUrl)">
                   打开 <el-icon><TopRight /></el-icon>
                 </el-button>
+                <el-checkbox
+                  v-if="historySelectMode"
+                  class="jd-job-card__select"
+                  :model-value="historySelectedIds.includes(c.id)"
+                  @change="(v) => toggleHistorySelected(c.id, v)"
+                />
               </div>
-            </el-card>
+              </el-card>
+            </div>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -220,13 +243,58 @@ const {
   jobHistoryList,
   openFavorites,
   openHistory,
+  isFavorite,
   toggleFavorite,
+  deleteJobHistoryBatch,
   openJobUrl,
   sourceLabel,
   sourceTagType,
   formatTimeDisplay,
   providePayload
 } = useUserDataStore({ isLoginPage })
+
+const historySelectMode = ref(false)
+const historySelectedIds = ref([])
+
+watch(
+  () => historyVisible.value,
+  (v) => {
+    if (v) {
+      historySelectMode.value = false
+      historySelectedIds.value = []
+    }
+  }
+)
+
+const toggleHistorySelected = (id, checked) => {
+  const n = Number(id)
+  if (!Number.isFinite(n) || n <= 0) return
+  const set = new Set(historySelectedIds.value || [])
+  if (checked) set.add(n)
+  else set.delete(n)
+  historySelectedIds.value = Array.from(set)
+}
+
+const selectAllHistory = () => {
+  historySelectedIds.value = (jobHistoryList.value || []).map((x) => x.id).filter((x) => x != null)
+}
+
+const deleteSelectedHistory = async () => {
+  const ids = historySelectedIds.value || []
+  if (!ids.length) return
+  try {
+    await ElMessageBox.confirm(`确定删除所选 ${ids.length} 条浏览历史吗？`, '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+      customClass: 'custom-message-box'
+    })
+    await deleteJobHistoryBatch(ids)
+    historySelectedIds.value = []
+    historySelectMode.value = false
+    ElMessage.success('已删除')
+  } catch {}
+}
 
 provide('userDataStore', providePayload)
 
@@ -304,6 +372,10 @@ onUnmounted(() => {
 .jd-job-card__actions {
   display: flex;
   gap: 8px;
+}
+
+.jd-job-card__select {
+  margin-left: auto;
 }
 
 @media (max-width: 980px) {

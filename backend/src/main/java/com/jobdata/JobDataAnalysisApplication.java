@@ -8,7 +8,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * 后端应用启动入口。
  */
 @SpringBootApplication
-@MapperScan("com.jobdata.mapper")
+@MapperScan({"com.jobdata.mapper", "com.jobdata.ai.mapper"})
 public class JobDataAnalysisApplication {
 
     /**

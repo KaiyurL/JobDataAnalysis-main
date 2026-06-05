@@ -1,4 +1,4 @@
-package com.jobdata.ai.model;
+package com.jobdata.ai.dto;
 
 import java.util.List;
 import java.util.Map;
@@ -46,3 +46,4 @@ public class AgentChatResponse {
         this.jobCards = jobCards;
     }
 }
+

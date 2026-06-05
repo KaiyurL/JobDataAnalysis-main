@@ -1,4 +1,4 @@
-package com.jobdata.ai.config;
+package com.jobdata.ai.common;
 
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreProperties;
